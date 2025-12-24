@@ -1,20 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Battle Royale Visualization</title>
+    <title>EPOK ROYALE</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Rubik+Glitch&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #1a1a1a;
-            --text-color: #ffffff;
-            --accent-color: #FF0055;
-            --secondary-color: #00CCFF;
-            --glass-bg: rgba(255, 255, 255, 0.1);
-            --glass-border: rgba(255, 255, 255, 0.2);
+            --bg-color: #121212;
+            --concrete: #2a2a2a;
+            --accent: #FF0055;
+            --neon-blue: #00F3FF;
+            --neon-green: #00FF66;
+            --ui-font: 'Audiowide', cursive;
+            --title-font: 'Rubik Glitch', system-ui;
         }
-
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
 
         * {
             box-sizing: border-box;
@@ -24,90 +28,35 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
             background-color: var(--bg-color);
-            color: var(--text-color);
+            color: white;
             overflow: hidden;
             width: 100vw;
             height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            font-family: var(--ui-font);
         }
 
-        /* Setup Screen */
-        #setup-screen {
+        /* 
+           LAYER SYSTEM:
+           Z-0: Concrete Texture (CSS/Image)
+           Z-1: Paint Canvas (Persistent Splatters)
+           Z-2: Game Canvas (Active Players)
+           Z-10: UI Layer
+        */
+
+        #texture-layer {
             position: absolute;
-            z-index: 10;
-            background: rgba(30, 30, 30, 0.95);
-            padding: 2rem;
-            border-radius: 20px;
-            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--glass-border);
-            text-align: center;
-            width: 90%;
-            max-width: 500px;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-            backdrop-filter: blur(10px);
-            transition: opacity 0.5s ease;
-        }
-
-        h1 {
-            font-weight: 900;
-            font-size: 2rem;
-            background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-transform: uppercase;
-            letter-spacing: -1px;
-        }
-
-        textarea {
+            top: 0;
+            left: 0;
             width: 100%;
-            height: 200px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            color: white;
-            padding: 1rem;
-            font-family: 'Inter', sans-serif;
-            font-size: 1rem;
-            resize: none;
-            outline: none;
-            transition: border-color 0.3s;
+            height: 100%;
+            z-index: 0;
+            background-color: var(--concrete);
+            background-image:
+                radial-gradient(transparent 0%, #111 100%),
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
         }
 
-        textarea:focus {
-            border-color: var(--secondary-color);
-        }
-
-        button {
-            background: linear-gradient(135deg, var(--accent-color), #cc0044);
-            border: none;
-            padding: 1rem 2rem;
-            color: white;
-            font-weight: 700;
-            font-size: 1.1rem;
-            border-radius: 50px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            box-shadow: 0 10px 20px rgba(255, 0, 85, 0.3);
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 15px 30px rgba(255, 0, 85, 0.5);
-        }
-
-        button:active {
-            transform: translateY(1px);
-        }
-
-        /* Canvas */
         canvas {
             position: absolute;
             top: 0;
@@ -116,227 +65,662 @@
             height: 100%;
         }
 
-        /* HUD */
-        #hud {
+        #paint-canvas {
+            z-index: 1;
+            filter: contrast(1.2) brightness(1.1);
+            /* Make paint pop */
+        }
+
+        #game-canvas {
+            z-index: 2;
+        }
+
+        /* UI Overlays */
+        #ui-layer {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            z-index: 10;
             pointer-events: none;
-            padding: 2rem;
-            opacity: 0;
-            transition: opacity 0.5s;
+            /* Let clicks pass through usually */
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
-        .hud-visible {
-            opacity: 1 !important;
+        /* Setup Panel */
+        .panel {
+            pointer-events: auto;
+            background: rgba(20, 20, 20, 0.9);
+            border: 4px solid #fff;
+            box-shadow: 10px 10px 0px rgba(0, 0, 0, 0.5);
+            padding: 2.5rem;
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            transform: rotate(-1deg);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        #alive-counter {
-            position: absolute;
-            top: 2rem;
-            left: 2rem;
-            font-size: 2rem;
-            font-weight: 900;
+        .panel h1 {
+            font-family: var(--title-font);
+            font-size: 4rem;
+            margin-bottom: 0.5rem;
             color: white;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            text-shadow: 4px 4px 0px var(--accent);
+            line-height: 1;
+            transform: scale(1.1);
         }
 
-        #kill-feed {
+        .panel p {
+            font-family: var(--ui-font);
+            color: #888;
+            margin-bottom: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 0.8rem;
+        }
+
+        textarea {
+            width: 100%;
+            height: 180px;
+            background: #000;
+            border: 2px solid #333;
+            color: var(--neon-green);
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            font-size: 1.1rem;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            resize: none;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: var(--neon-blue);
+        }
+
+        .btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 1rem 3rem;
+            font-family: var(--ui-font);
+            font-size: 1.5rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 5px 5px 0px var(--accent);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .btn:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 7px 7px 0px var(--accent);
+            background: var(--neon-blue);
+        }
+
+        .btn:active {
+            transform: translate(2px, 2px);
+            box-shadow: 1px 1px 0px var(--accent);
+        }
+
+        /* HUD */
+        #hud-top {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 1s;
+            z-index: 20;
+        }
+
+        #phase-indicator {
             position: absolute;
             top: 2rem;
-            right: 2rem;
-            text-align: right;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 2rem;
+            text-shadow: 0 0 10px var(--accent);
+            z-index: 25;
+            display: none;
+        }
+
+        .counter {
+            background: #000;
+            color: #fff;
+            padding: 0.5rem 1.5rem;
+            font-size: 1.5rem;
+            border: 2px solid white;
+            box-shadow: 4px 4px 0px var(--neon-blue);
+            transform: skew(-10deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: fit-content;
+        }
+
+        .kill-feed {
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
-            font-size: 1rem;
-            font-weight: 700;
+            align-items: flex-end;
         }
 
         .kill-msg {
-            background: rgba(0, 0, 0, 0.6);
+            background: #000;
+            color: #fff;
             padding: 0.5rem 1rem;
-            border-radius: 8px;
-            animation: slideIn 0.3s ease-out forwards;
-            opacity: 0;
-            transform: translateX(20px);
-        }
-
-        @keyframes slideIn {
-            to { opacity: 1; transform: translateX(0); }
+            border-left: 5px solid;
+            font-size: 1rem;
+            font-family: monospace;
+            text-transform: uppercase;
+            animation: slideIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
         /* Win Screen */
-        #win-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background: rgba(0, 0, 0, 0.85);
-            z-index: 20;
+        #win-overlay {
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.5s;
+            background: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(5px);
+            transition: opacity 0.5s;
         }
 
-        .win-visible {
-            opacity: 1 !important;
-            pointer-events: all !important;
-        }
-
-        #winner-text {
-            font-size: 5rem;
-            font-weight: 900;
-            text-align: center;
+        #win-title {
+            font-family: var(--title-font);
+            font-size: 8rem;
+            line-height: 1;
             margin-bottom: 2rem;
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 50px rgba(255, 215, 0, 0.5);
-            transform: scale(0.8);
-            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-
-        .win-visible #winner-text {
-            transform: scale(1);
+            color: white;
+            text-shadow: 10px 10px 0px var(--neon-green);
+            transform: rotate(-5deg);
         }
 
         .hidden {
             display: none !important;
         }
+
+        .visible {
+            opacity: 1 !important;
+            pointer-events: auto !important;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(50px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
+
 <body>
 
-    <!-- Setup Screen -->
-    <div id="setup-screen">
-        <h1>Battle Royale</h1>
-        <p style="color: #aaa; font-size: 0.9rem;">Zero-Input Spectator Arena</p>
-        <textarea id="name-input" placeholder="Paste names here (one per line)...&#10;Alice&#10;Bob&#10;Charlie&#10;Dave"></textarea>
-        <button id="start-btn">Start Battle</button>
+    <div id="texture-layer"></div>
+    <canvas id="paint-canvas"></canvas>
+    <canvas id="game-canvas"></canvas>
+
+    <div id="ui-layer">
+        <!-- SETUP -->
+        <div id="setup-panel" class="panel">
+            <h1>EPOK<br>ROYALE</h1>
+            <p>Qui laissera sa trace ?</p>
+            <textarea id="name-input" spellcheck="false">GHOST
+BLADE
+NEON
+VIPER
+SHADE</textarea>
+            <button class="btn" id="start-btn">JOUER</button>
+        </div>
+
+        <!-- WIN -->
+        <div id="win-overlay" class="panel visible hidden"
+            style="background: transparent; border: none; box-shadow: none;">
+            <div id="win-title">GAGNANT</div>
+            <button class="btn" id="restart-btn">REJOUER</button>
+        </div>
     </div>
 
-    <!-- Game Arena -->
-    <canvas id="arena"></canvas>
-
-    <!-- HUD -->
-    <div id="hud">
-        <div id="alive-counter">Alive: 0</div>
-        <div id="kill-feed"></div>
-    </div>
-
-    <!-- Win Screen -->
-    <div id="win-screen">
-        <h1 id="winner-text">WINNER</h1>
-        <button id="restart-btn">New Battle</button>
+    <div id="hud-top">
+        <div class="counter" id="alive-cnt">5 RESTANTS</div>
+        <div id="phase-indicator">WARMUP</div>
+        <div class="kill-feed" id="kill-feed"></div>
     </div>
 
     <script>
-        // --- Constants & Config ---
-        const COLORS = [
-            '#FF0055', '#00CCFF', '#00FF99', '#FFFF00', '#FF3300', '#9900FF', 
-            '#FF6600', '#00FFCC', '#FF00CC', '#33FF00', '#0066FF', '#CCFF00'
-        ];
-        
-        const GRAVITY = 0; // Top-down view, no gravity
-        const DRAG = 1; // No friction in space
-        const BOUNCE = 1; // Perfectly elastic wall collisions
-        const MIN_SPEED = 2;
-        const MAX_Speed = 5;
+        const CONFIG = {
+            colors: [
+                '#FF0055', // Neon Red
+                '#00F3FF', // Cyan
+                '#39FF14', // Neon Green
+                '#FFFF00', // Yellow
+                '#BE00FF', // Purple
+                '#FF6600', // Orange
+            ],
+            minSpeed: 3,
+            maxSpeed: 7,
+            drag: 1.0,  // No friction
+            radius: 20
+        };
 
-        // --- Utils ---
+        const $ = id => document.getElementById(id);
         const rand = (min, max) => Math.random() * (max - min) + min;
-        const randColor = () => COLORS[Math.floor(Math.random() * COLORS.length)];
+        const randInt = (min, max) => Math.floor(rand(min, max));
+        const randColor = () => CONFIG.colors[randInt(0, CONFIG.colors.length)];
 
-        // --- Classes ---
+        class Game {
+            constructor() {
+                this.gameCanvas = $('game-canvas');
+                this.paintCanvas = $('paint-canvas');
+                this.gCtx = this.gameCanvas.getContext('2d');
+                this.pCtx = this.paintCanvas.getContext('2d');
+
+                this.width = window.innerWidth;
+                this.height = window.innerHeight;
+
+                this.players = [];
+                this.particles = []; // For transient effects like sparks
+                this.running = false;
+                this.gracePeriod = 0;
+
+                window.addEventListener('resize', () => this.resize());
+                this.resize();
+
+                // Bind UI
+                $('start-btn').onclick = () => this.start();
+                $('restart-btn').onclick = () => this.reset();
+
+                this.loop = this.loop.bind(this);
+                requestAnimationFrame(this.loop);
+            }
+
+            resize() {
+                this.width = window.innerWidth;
+                this.height = window.innerHeight;
+
+                this.gameCanvas.width = this.width;
+                this.gameCanvas.height = this.height;
+
+                // We don't want to clear paint on resize usually, but for simplicity let's just resize
+                // A better approach would be to copy the old canvas, but let's keep it simple
+                this.paintCanvas.width = this.width;
+                this.paintCanvas.height = this.height;
+            }
+
+            reset() {
+                this.running = false;
+                $('setup-panel').classList.remove('hidden');
+                $('win-overlay').classList.add('hidden');
+                $('hud-top').classList.remove('visible');
+                $('phase-indicator').style.display = 'none';
+
+                // Clear Everything
+                this.pCtx.clearRect(0, 0, this.width, this.height);
+                this.gCtx.clearRect(0, 0, this.width, this.height);
+                $('kill-feed').innerHTML = '';
+            }
+
+            start() {
+                const names = $('name-input').value.split('\n').filter(n => n.trim().length > 0);
+                if (names.length < 2) return alert("NEED MORE PLAYERS");
+
+                // this.players = names.map(name => new Player(name, this.width, this.height)); // OLD
+
+                this.players = [];
+                for (let name of names) {
+                    const pos = this.getSafeSpawnPosition(this.players);
+                    if (pos) {
+                        this.players.push(new Player(name, pos.x, pos.y));
+                    } else {
+                        console.warn(`Could not find safe spawn for ${name}`);
+                        // Optionally spawn them anyway or skip. 
+                        // Let's spawn them at random if all else fails to avoid losing players
+                        this.players.push(new Player(name, rand(100, this.width - 100), rand(100, this.height - 100)));
+                    }
+                }
+
+                $('setup-panel').classList.add('hidden');
+                $('hud-top').classList.add('visible');
+                this.updateCount();
+                $('setup-panel').classList.add('hidden');
+                $('hud-top').classList.add('visible');
+                this.updateCount();
+
+                this.gracePeriod = 300; // 5 seconds approx at 60fps
+                this.updatePhaseUI();
+
+                this.running = true;
+            }
+
+            updatePhaseUI() {
+                const el = $('phase-indicator');
+                if (this.gracePeriod > 0) {
+                    el.innerText = "CHAUFFE"; // WARMUP
+                    el.style.color = CONFIG.colors[2]; // Green
+                    el.style.display = 'block';
+                } else {
+                    el.innerText = "COMBAT"; // FIGHT
+                    el.style.color = CONFIG.colors[0]; // Red
+                    setTimeout(() => el.style.display = 'none', 1000);
+                }
+            }
+
+            getSafeSpawnPosition(existingPlayers) {
+                const maxAttempts = 100;
+                const buffer = 50; // Extra space between balls
+
+                for (let i = 0; i < maxAttempts; i++) {
+                    const x = rand(100, this.width - 100);
+                    const y = rand(100, this.height - 100);
+
+                    let valid = true;
+                    for (let p of existingPlayers) {
+                        const dist = Math.hypot(x - p.x, y - p.y);
+                        // 2 * radius + buffer
+                        if (dist < (CONFIG.radius * 2) + buffer) {
+                            valid = false;
+                            break;
+                        }
+                    }
+
+                    if (valid) return { x, y };
+                }
+                return null; // Failed to find spot
+            }
+
+            updateCount() {
+                const alive = this.players.filter(p => !p.dead).length;
+                $('alive-cnt').innerText = `${alive} RESTANTS`;
+            }
+
+            logKill(winner, loser) {
+                const div = document.createElement('div');
+                div.className = 'kill-msg';
+                div.style.borderColor = winner.color;
+                div.innerHTML = `<span style="color:${winner.color}">${winner.name}</span> SPLATTED <span style="color:#888">${loser.name}</span>`;
+                $('kill-feed').prepend(div);
+                setTimeout(() => div.remove(), 4000);
+            }
+
+            loop() {
+                // Clear Game Canvas only (Paint persists)
+                this.gCtx.clearRect(0, 0, this.width, this.height);
+
+                if (this.running) {
+                    // Game Logic
+                    if (this.gracePeriod > 0) {
+                        this.gracePeriod--;
+                        if (this.gracePeriod === 0) this.updatePhaseUI();
+                    }
+
+                    this.players.forEach(p => p.update(this));
+                    this.checkCollisions();
+
+                    // Render Players
+                    this.players.forEach(p => p.draw(this.gCtx));
+                }
+
+                // Render Particles (Transient)
+                this.gCtx.globalCompositeOperation = 'lighter';
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const p = this.particles[i];
+                    p.update();
+                    p.draw(this.gCtx);
+                    if (p.life <= 0) this.particles.splice(i, 1);
+                }
+                this.gCtx.globalCompositeOperation = 'source-over';
+
+                requestAnimationFrame(this.loop);
+            }
+
+            checkCollisions() {
+                const active = this.players.filter(p => !p.dead);
+
+                for (let i = 0; i < active.length; i++) {
+                    for (let j = i + 1; j < active.length; j++) {
+                        const p1 = active[i];
+                        const p2 = active[j];
+
+                        const dx = p1.x - p2.x;
+                        const dy = p1.y - p2.y;
+                        const dist = Math.hypot(dx, dy);
+                        const minDist = p1.radius + p2.radius;
+
+                        if (dist < minDist) {
+                            if (this.gracePeriod > 0) {
+                                // Elastic Collision (Peace Phase)
+                                this.resolveElastic(p1, p2, dx, dy, dist);
+                            } else {
+                                // Combat Phase
+                                if (p1.cooldown <= 0 && p2.cooldown <= 0) {
+                                    this.resolveCombat(p1, p2);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            resolveElastic(p1, p2, dx, dy, dist) {
+                // 1. Separate circles to prevent sticky glitches
+                const overlap = (p1.radius + p2.radius - dist) / 2;
+                const offsetX = (dx / dist) * overlap;
+                const offsetY = (dy / dist) * overlap;
+
+                p1.x += offsetX;
+                p1.y += offsetY;
+                p2.x -= offsetX;
+                p2.y -= offsetY;
+
+                // 2. Reflect Velocity (Elastic Collision)
+                // Normal vector
+                const nx = dx / dist;
+                const ny = dy / dist;
+
+                // Relative velocity
+                const dvx = p1.vx - p2.vx;
+                const dvy = p1.vy - p2.vy;
+
+                // Velocity along normal
+                const velAlongNormal = dvx * nx + dvy * ny;
+
+                // Do not resolve if velocities are separating
+                if (velAlongNormal > 0) return;
+
+                // Restitution (bounciness) 1 = perfect elastic
+                const restitution = 1;
+
+                // Impulse scalar
+                const j = -(1 + restitution) * velAlongNormal / 2; // /2 assuming equal mass
+
+                // Apply impulse
+                p1.vx += j * nx;
+                p1.vy += j * ny;
+                p2.vx -= j * nx;
+                p2.vy -= j * ny;
+            }
+
+            resolveCombat(p1, p2) {
+                // RNG Winner
+                const winner = Math.random() > 0.5 ? p1 : p2;
+                const loser = winner === p1 ? p2 : p1;
+
+                // Eliminate Loser
+                loser.dead = true;
+
+                // HUGE SPLAT
+                this.drawSplat(loser.x, loser.y, loser.color, 80, 50); // Big messy splat
+                this.spawnParticles(loser.x, loser.y, loser.color, 30); // Sparks
+
+                // Buff Winner
+                winner.radius += 5;
+                winner.cooldown = 20;
+
+                // Bounce Winner
+                const angle = Math.atan2(winner.y - loser.y, winner.x - loser.x);
+                winner.vx = Math.cos(angle) * 8;
+                winner.vy = Math.sin(angle) * 8;
+
+                this.logKill(winner, loser);
+                this.updateCount();
+
+                // Check Win
+                const alive = this.players.filter(p => !p.dead);
+                if (alive.length === 1) {
+                    this.endGame(alive[0]);
+                }
+            }
+
+            endGame(winner) {
+                this.running = false;
+                setTimeout(() => {
+                    $('win-title').innerHTML = winner.name + "<br>WINS";
+                    $('win-title').style.textShadow = `10px 10px 0px ${winner.color}`;
+                    $('win-overlay').classList.remove('hidden');
+                    $('win-overlay').classList.add('visible');
+
+                    // Final celebration splats
+                    for (let i = 0; i < 10; i++) {
+                        setTimeout(() => {
+                            this.drawSplat(
+                                rand(this.width * 0.2, this.width * 0.8),
+                                rand(this.height * 0.2, this.height * 0.8),
+                                winner.color, 120, 100
+                            );
+                        }, i * 200);
+                    }
+                }, 1000);
+            }
+
+            drawSplat(x, y, color, size, count) {
+                const ctx = this.pCtx;
+                ctx.fillStyle = color;
+
+                // Main blob
+                ctx.beginPath();
+                ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Random splatters around
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * size;
+                    const r = Math.random() * (size * 0.2);
+
+                    ctx.beginPath();
+                    ctx.arc(
+                        x + Math.cos(angle) * dist,
+                        y + Math.sin(angle) * dist,
+                        r, 0, Math.PI * 2
+                    );
+                    ctx.fill();
+                }
+            }
+
+            spawnParticles(x, y, color, count) {
+                for (let i = 0; i < count; i++) {
+                    this.particles.push(new Particle(x, y, color));
+                }
+            }
+        }
+
         class Player {
             constructor(name, x, y) {
                 this.name = name;
+                this.radius = CONFIG.radius;
+                this.color = randColor();
                 this.x = x;
                 this.y = y;
-                this.radius = 25;
-                this.color = randColor();
-                
-                // Random velocity
+
                 const angle = Math.random() * Math.PI * 2;
-                const speed = rand(MIN_SPEED, MAX_Speed);
+                const speed = rand(CONFIG.minSpeed, CONFIG.maxSpeed);
                 this.vx = Math.cos(angle) * speed;
                 this.vy = Math.sin(angle) * speed;
 
-                this.mass = 1;
                 this.dead = false;
-                this.cooldown = 0; // Frames until can collide again
-                this.growthTarget = this.radius;
+                this.cooldown = 0;
             }
 
-            update(canvasWidth, canvasHeight) {
+            update(game) {
                 if (this.dead) return;
 
                 // Move
                 this.x += this.vx;
                 this.y += this.vy;
 
-                // Bounce off walls
-                if (this.x - this.radius < 0) {
-                    this.x = this.radius;
-                    this.vx *= -1;
-                } else if (this.x + this.radius > canvasWidth) {
-                    this.x = canvasWidth - this.radius;
-                    this.vx *= -1;
+                // Wall Bounce
+                if (this.x < 0 + this.radius) { this.x = this.radius; this.vx *= -1; }
+                if (this.x > game.width - this.radius) { this.x = game.width - this.radius; this.vx *= -1; }
+                if (this.y < 0 + this.radius) { this.y = this.radius; this.vy *= -1; }
+                if (this.y > game.height - this.radius) { this.y = game.height - this.radius; this.vy *= -1; }
+
+                // Paint Trail (Frequency check to save perf if needed, but per-frame is smoother)
+                if (Math.random() > 0.1) {
+                    game.pCtx.fillStyle = this.color;
+                    game.pCtx.beginPath();
+                    game.pCtx.arc(this.x, this.y, this.radius * 0.8, 0, Math.PI * 2);
+                    game.pCtx.fill();
+
+                    // Occasional drip
+                    if (Math.random() > 0.9) {
+                        game.pCtx.beginPath();
+                        game.pCtx.arc(
+                            this.x + rand(-10, 10),
+                            this.y + rand(-10, 10),
+                            rand(2, 6), 0, Math.PI * 2
+                        );
+                        game.pCtx.fill();
+                    }
                 }
 
-                if (this.y - this.radius < 0) {
-                    this.y = this.radius;
-                    this.vy *= -1;
-                } else if (this.y + this.radius > canvasHeight) {
-                    this.y = canvasHeight - this.radius;
-                    this.vy *= -1;
-                }
-
-                // Growth animation
-                if (this.radius < this.growthTarget) {
-                    this.radius += 0.5;
-                }
-
-                // Cooldown decay
                 if (this.cooldown > 0) this.cooldown--;
             }
 
             draw(ctx) {
                 if (this.dead) return;
 
+                // Draw Character (Spray Can Top look)
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
                 // Glow
-                ctx.shadowBlur = 15;
+                ctx.shadowBlur = 20;
                 ctx.shadowColor = this.color;
 
-                // Body
+                // Core
+                ctx.fillStyle = '#fff';
                 ctx.beginPath();
-                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-                ctx.fillStyle = this.color;
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.closePath();
 
+                // Inner Color
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius * 0.7, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Name
                 ctx.shadowBlur = 0;
-
-                // Border
-                ctx.strokeStyle = "rgba(255,255,255,0.8)";
-                ctx.lineWidth = 3;
-                ctx.stroke();
-
-                // Name Label
-                ctx.fillStyle = "white";
-                ctx.font = "bold 14px Inter, sans-serif";
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 14px 'Audiowide', sans-serif";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-                ctx.fillText(this.name, this.x, this.y);
+                ctx.fillText(this.name, 0, -this.radius - 15);
+
+                ctx.restore();
             }
         }
 
@@ -350,19 +734,18 @@
                 this.vx = Math.cos(angle) * speed;
                 this.vy = Math.sin(angle) * speed;
                 this.life = 1.0;
-                this.decay = rand(0.02, 0.05);
-                this.size = rand(3, 6);
+                this.size = rand(2, 6);
             }
 
             update() {
                 this.x += this.vx;
                 this.y += this.vy;
-                this.life -= this.decay;
+                this.life -= 0.03;
                 this.size *= 0.95;
             }
 
             draw(ctx) {
-                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.globalAlpha = this.life;
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
@@ -371,190 +754,9 @@
             }
         }
 
-        class Game {
-            constructor() {
-                this.canvas = document.getElementById('arena');
-                this.ctx = this.canvas.getContext('2d');
-                this.players = [];
-                this.particles = [];
-                this.running = false;
-                this.totalPlayers = 0;
-                
-                // Elements
-                this.setupScreen = document.getElementById('setup-screen');
-                this.hud = document.getElementById('hud');
-                this.winScreen = document.getElementById('win-screen');
-                this.aliveCounter = document.getElementById('alive-counter');
-                this.killFeed = document.getElementById('kill-feed');
-                this.winnerText = document.getElementById('winner-text');
-                this.nameInput = document.getElementById('name-input');
-
-                // Resize listener
-                window.addEventListener('resize', () => this.resize());
-                this.resize();
-
-                // Bindings
-                document.getElementById('start-btn').addEventListener('click', () => this.start());
-                document.getElementById('restart-btn').addEventListener('click', () => this.reset());
-
-                // Loop
-                requestAnimationFrame(() => this.loop());
-            }
-
-            resize() {
-                this.canvas.width = window.innerWidth;
-                this.canvas.height = window.innerHeight;
-            }
-
-            start() {
-                const rawText = this.nameInput.value.trim();
-                const names = rawText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
-
-                if (names.length < 2) {
-                    alert("Please enter at least 2 names!");
-                    return;
-                }
-
-                this.players = [];
-                this.particles = [];
-                this.totalPlayers = names.length;
-
-                // Spawn players nicely spread out
-                names.forEach(name => {
-                    const x = rand(100, this.canvas.width - 100);
-                    const y = rand(100, this.canvas.height - 100);
-                    this.players.push(new Player(name, x, y));
-                });
-
-                this.setupScreen.classList.add('hidden');
-                this.hud.classList.add('hud-visible');
-                this.running = true;
-                this.updateHUD();
-            }
-
-            reset() {
-                this.running = false;
-                this.winScreen.classList.remove('win-visible');
-                this.hud.classList.remove('hud-visible');
-                this.setupScreen.classList.remove('hidden');
-                this.players = [];
-                this.particles = [];
-                this.killFeed.innerHTML = '';
-            }
-
-            spawnExplosion(x, y, color) {
-                for (let i = 0; i < 20; i++) {
-                    this.particles.push(new Particle(x, y, color));
-                }
-            }
-
-            addToKillFeed(winner, loser) {
-                const msg = document.createElement('div');
-                msg.className = 'kill-msg';
-                msg.innerHTML = `<span style="color:${winner.color}">${winner.name}</span> <span style="color:#aaa">eliminated</span> <span style="color:${loser.color}">${loser.name}</span>`;
-                this.killFeed.prepend(msg);
-                
-                // Remove after delay
-                setTimeout(() => {
-                    msg.style.opacity = '0';
-                    setTimeout(() => msg.remove(), 500);
-                }, 4000);
-            }
-
-            updateHUD() {
-                const alive = this.players.filter(p => !p.dead).length;
-                this.aliveCounter.innerText = `Alive: ${alive} / ${this.totalPlayers}`;
-            }
-
-            resolveCombat(p1, p2) {
-                if (p1.dead || p2.dead) return;
-                
-                // 50/50 Chance
-                const winner = Math.random() > 0.5 ? p1 : p2;
-                const loser = winner === p1 ? p2 : p1;
-
-                // Kill loser
-                loser.dead = true;
-                this.spawnExplosion(loser.x, loser.y, loser.color);
-
-                // Buff winner
-                winner.growthTarget += 5;
-                
-                // Physics impulse for winner (bounce off the ghost of the loser)
-                const angle = Math.atan2(winner.y - loser.y, winner.x - loser.x);
-                const boost = 3;
-                winner.vx = Math.cos(angle) * (Math.abs(winner.vx) + boost);
-                winner.vy = Math.sin(angle) * (Math.abs(winner.vy) + boost);
-                
-                // Add Cooldown to winner to prevent instant multi-collisions
-                winner.cooldown = 10;
-
-                this.addToKillFeed(winner, loser);
-                this.updateHUD();
-                this.checkWinCondition();
-            }
-
-            checkWinCondition() {
-                const alive = this.players.filter(p => !p.dead);
-                if (alive.length === 1) {
-                    this.endGame(alive[0]);
-                }
-            }
-
-            endGame(winner) {
-                this.running = false;
-                this.winnerText.innerText = `WINNER: ${winner.name}`;
-                this.winnerText.style.color = winner.color;
-                this.winScreen.classList.add('win-visible');
-            }
-
-            checkCollisions() {
-                for (let i = 0; i < this.players.length; i++) {
-                    for (let j = i + 1; j < this.players.length; j++) {
-                        const p1 = this.players[i];
-                        const p2 = this.players[j];
-
-                        if (p1.dead || p2.dead) continue;
-                        if (p1.cooldown > 0 || p2.cooldown > 0) continue;
-
-                        const dx = p1.x - p2.x;
-                        const dy = p1.y - p2.y;
-                        const dist = Math.hypot(dx, dy);
-
-                        if (dist < p1.radius + p2.radius) {
-                            this.resolveCombat(p1, p2);
-                        }
-                    }
-                }
-            }
-
-            loop() {
-                // Clear
-                this.ctx.fillStyle = "#1a1a1a";
-                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-                if (this.running) {
-                    // Update
-                    this.players.forEach(p => p.update(this.canvas.width, this.canvas.height));
-                    this.particles.forEach((p, index) => {
-                        p.update();
-                        if (p.life <= 0) this.particles.splice(index, 1);
-                    });
-
-                    this.checkCollisions();
-                }
-
-                // Draw
-                this.players.forEach(p => p.draw(this.ctx));
-                this.particles.forEach(p => p.draw(this.ctx));
-
-                requestAnimationFrame(() => this.loop());
-            }
-        }
-
         // Init
-        window.onload = () => new Game();
-
+        new Game();
     </script>
 </body>
+
 </html>
