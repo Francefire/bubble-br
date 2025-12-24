@@ -470,6 +470,59 @@
         .role-passive:hover .passive-tooltip {
             opacity: 1;
         }
+
+        /* Persistent Action Log HUD */
+        #action-log-hud {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 300px;
+            max-height: 250px;
+            z-index: 20;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .hud-log-entry {
+            background: rgba(0, 0, 0, 0.6);
+            border-left: 3px solid #00FF66;
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            color: #fff;
+            animation: slideInLeft 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-shadow: 1px 1px 2px #000;
+        }
+
+        .hud-log-entry.combat {
+            border-left-color: #FF0055;
+        }
+
+        .hud-log-entry.kill {
+            border-left-color: #FF6600;
+        }
+
+        .hud-log-entry.capacité {
+            border-left-color: #00F3FF;
+        }
+
+        .hud-log-entry.système {
+            border-left-color: #FFD700;
+        }
+
+        @keyframes slideInLeft {
+            from {
+                transform: translateX(-20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 
@@ -516,6 +569,9 @@ SHADE</textarea>
         <div id="phase-indicator">ECHAUFFEMENT</div>
         <div class="kill-feed" id="kill-feed"></div>
     </div>
+
+    <!-- HUD Action Log -->
+    <div id="action-log-hud"></div>
 
     <!-- Debug HUD -->
     <div id="debug-hud">
@@ -580,7 +636,7 @@ SHADE</textarea>
             glitchTeleportInterval: 240,
             ghostInvincibleTime: 120,
             webLifetime: 4000,
-            vampireAuraRadius: 100,
+            vampireAuraRadius: 150,
             vampireDeathChance: 0.005,
             stalemateTime: 10000,
             shrinkRate: 25
@@ -683,6 +739,20 @@ SHADE</textarea>
                     // Limit to 50 entries
                     while (logEl.elt.children.length > 50) {
                         logEl.elt.removeChild(logEl.elt.lastChild);
+                    }
+                }
+
+                // Update HUD log (always visible, last 10)
+                const hudLogEl = select('#action-log-hud');
+                if (hudLogEl) {
+                    const hudEntry = createDiv('');
+                    hudEntry.class(`hud-log-entry ${type}`);
+                    hudEntry.html(`${message}`);
+                    hudEntry.parent('action-log-hud');
+
+                    // Limit to 10 entries in HUD
+                    while (hudLogEl.elt.children.length > 10) {
+                        hudLogEl.elt.removeChild(hudLogEl.elt.firstChild);
                     }
                 }
             }
@@ -956,8 +1026,7 @@ SHADE</textarea>
                     // Shield Break Effect
                     this.spawnParticles(loser.pos.x, loser.pos.y, '#FFFFFF', 15);
 
-                    // Specific feedback msg?
-                    // Maybe not spam chat for hits, only kills.
+                    this.log(`🛡️ Bouclier de ${loser.name} touché ! (${loser.lives - 1} restants)`, 'capacité');
                     return;
                 }
 
@@ -976,6 +1045,11 @@ SHADE</textarea>
 
                 this.log(`💀 ${winner.name} a éliminé ${loser.name}`, 'kill');
                 this.logKill(winner, loser, msg);
+
+                if (loser.role === 'martyr') {
+                    this.log(`💣 ${loser.name} va exploser !`, 'capacité');
+                }
+
                 this.updateCount();
                 this.checkWin();
             }
@@ -1262,6 +1336,15 @@ SHADE</textarea>
                             sourcePlayer: p // Store reference to the webmaster
                         });
                     }
+                    if (p.role === 'ghost') {
+                        if (p.ghostInvincible) {
+                            p.ghostInvincibleTime--;
+                            if (p.ghostInvincibleTime <= 0) {
+                                p.ghostInvincible = false;
+                                this.log(`👻 ${p.name} n'est plus invincible`, 'capacité');
+                            }
+                        }
+                    }
                 });
 
                 // Trail cleanup
@@ -1272,6 +1355,9 @@ SHADE</textarea>
                     if (p.role === 'webmaster' || p.ghostInvincible) return;
                     for (let t of this.webTrails) {
                         if (t.id !== p.id && p.pos.dist(t.pos) < p.radius) {
+                            if (p.webSlowTimer <= 0) {
+                                this.log(`🕸️ ${p.name} est ralenti par ${t.sourcePlayer.name}`, 'capacité');
+                            }
                             p.webSlowTimer = 10; // Apply slow
                             p.webSlowSource = t.sourcePlayer; // Track who's slowing us
                             break;
@@ -1406,7 +1492,7 @@ SHADE</textarea>
                     loser.assassinWinChance = max(0.08, 0.8 - (loser.assassinFightsCount * 0.12));
                 }
 
-                this.kill(winner, loser);
+                this.kill(winner, loser, 'A ECLATE'); // Explicitly set duel msg
             }
 
             endGame(winner) {
