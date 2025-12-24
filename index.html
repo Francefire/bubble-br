@@ -295,7 +295,7 @@ SHADE</textarea>
                     </svg>
                 </button>
             </div>
-            <input type="file" id="csv-input" accept=".csv, .txt" style="display: none;">
+            <input type="file" id="csv-input" accept=".csv, .txt" style="display: none;" multiple>
         </div>
 
         <!-- WIN -->
@@ -829,19 +829,22 @@ SHADE</textarea>
                 }
             }
 
-            handleFileUpload(e) {
-                const file = e.target.files[0];
-                if (!file) return;
+            async handleFileUpload(e) {
+                const files = Array.from(e.target.files);
+                if (files.length === 0) return;
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const csvText = event.target.result;
-                    const lines = csvText.split('\n').filter(line => line.trim().length > 0);
+                const allPlayerEntries = [];
 
-                    if (lines.length < 2) {
-                        alert('CSV file is empty or invalid');
-                        return;
-                    }
+                for (const file of files) {
+                    const text = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = (event) => resolve(event.target.result);
+                        reader.onerror = (error) => reject(error);
+                        reader.readAsText(file);
+                    });
+
+                    const lines = text.split('\n').filter(line => line.trim().length > 0);
+                    if (lines.length < 2) continue;
 
                     // Parse header to find column indices
                     const header = lines[0].split(',').map(col => col.replace(/"/g, '').trim());
@@ -849,11 +852,9 @@ SHADE</textarea>
                     const billingNameIndex = header.indexOf('Billing Name');
 
                     if (orderIdIndex === -1 || billingNameIndex === -1) {
-                        alert('CSV must contain "Order ID" and "Billing Name" columns');
-                        return;
+                        console.warn(`File ${file.name} missing required columns.`);
+                        continue;
                     }
-
-                    const playerEntries = [];
 
                     // Process each data row (skip header)
                     for (let i = 1; i < lines.length; i++) {
@@ -868,37 +869,31 @@ SHADE</textarea>
                         // Remove leading zeros from order ID
                         orderId = parseInt(orderId, 10).toString();
 
-                        // Parse the name: "FirstName LastName" or "LastName FirstName"
+                        // Parse the name
                         const nameParts = billingName.split(' ').filter(p => p.length > 0);
                         if (nameParts.length === 0) continue;
 
-                        // Assume format is "FirstName LastName"
                         const firstName = nameParts[0];
-                        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+                        const lastPart = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
                         const firstLetter = firstName.charAt(0).toUpperCase();
 
-                        // Format: "LastName F#OrderID" or "FirstName F#OrderID" if no last name
-                        const displayName = firstName ? firstName : lastName;
+                        const displayName = firstName;
                         const formattedEntry = `${displayName} ${firstLetter}#${orderId}`;
 
-                        playerEntries.push(formattedEntry);
+                        allPlayerEntries.push(formattedEntry);
                     }
+                }
 
-                    if (playerEntries.length === 0) {
-                        alert('No valid player entries found in CSV');
-                        return;
-                    }
-
-                    // Add to textarea
+                if (allPlayerEntries.length === 0) {
+                    alert('No valid player entries found in selected files');
+                } else {
                     const currentText = $('name-input').value.trim();
-                    const newText = currentText ? currentText + '\n' + playerEntries.join('\n') : playerEntries.join('\n');
+                    const newText = currentText ? currentText + '\n' + allPlayerEntries.join('\n') : allPlayerEntries.join('\n');
                     $('name-input').value = newText;
+                }
 
-                    // Reset file input
-                    e.target.value = '';
-                };
-
-                reader.readAsText(file);
+                // Reset file input
+                e.target.value = '';
             }
 
             parseCSVLine(line) {
