@@ -283,7 +283,19 @@ BLADE
 NEON
 VIPER
 SHADE</textarea>
-            <button class="btn" id="start-btn">JOUER</button>
+            <div style="margin-bottom: 2rem; display: flex; gap: 1rem; justify-content: center;">
+                <button class="btn" id="start-btn">JOUER</button>
+                <button class="btn" id="import-btn" title="Importer CSV"
+                    style="background: #222; color: #fff; padding: 1rem; aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center; box-shadow: 5px 5px 0px #444;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                </button>
+            </div>
+            <input type="file" id="csv-input" accept=".csv, .txt" style="display: none;">
         </div>
 
         <!-- WIN -->
@@ -342,6 +354,8 @@ SHADE</textarea>
                 // Bind UI
                 $('start-btn').onclick = () => this.start();
                 $('restart-btn').onclick = () => this.reset();
+                $('import-btn').onclick = () => $('csv-input').click();
+                $('csv-input').onchange = (e) => this.handleFileUpload(e);
 
                 this.loop = this.loop.bind(this);
                 requestAnimationFrame(this.loop);
@@ -374,27 +388,31 @@ SHADE</textarea>
             }
 
             start() {
-                const names = $('name-input').value.split('\n').filter(n => n.trim().length > 0);
-                if (names.length < 2) return alert("NEED MORE PLAYERS");
-
-                // this.players = names.map(name => new Player(name, this.width, this.height)); // OLD
+                const playerEntries = $('name-input').value.split('\n').filter(n => n.trim().length > 0);
+                if (playerEntries.length < 2) return alert("NEED MORE PLAYERS");
 
                 this.players = [];
-                for (let name of names) {
+                let nextId = 1;
+                for (let entry of playerEntries) {
+                    let id, name;
+                    const parts = entry.split(',').map(p => p.trim());
+                    if (parts.length === 2) {
+                        id = parts[0];
+                        name = parts[1];
+                    } else {
+                        id = `P${nextId++}`;
+                        name = parts[0];
+                    }
+
                     const pos = this.getSafeSpawnPosition(this.players);
                     if (pos) {
-                        this.players.push(new Player(name, pos.x, pos.y));
+                        this.players.push(new Player(id, name, pos.x, pos.y));
                     } else {
-                        console.warn(`Could not find safe spawn for ${name}`);
-                        // Optionally spawn them anyway or skip. 
-                        // Let's spawn them at random if all else fails to avoid losing players
-                        this.players.push(new Player(name, rand(100, this.width - 100), rand(100, this.height - 100)));
+                        console.warn(`Could not find safe spawn for ${name} (ID: ${id})`);
+                        this.players.push(new Player(id, name, rand(100, this.width - 100), rand(100, this.height - 100)));
                     }
                 }
 
-                $('setup-panel').classList.add('hidden');
-                $('hud-top').classList.add('visible');
-                this.updateCount();
                 $('setup-panel').classList.add('hidden');
                 $('hud-top').classList.add('visible');
                 this.updateCount();
@@ -408,7 +426,7 @@ SHADE</textarea>
             updatePhaseUI() {
                 const el = $('phase-indicator');
                 if (this.gracePeriod > 0) {
-                    el.innerText = "CHAUFFE"; // WARMUP
+                    el.innerText = "PREPAREZ VOUS !"; // WARMUP
                     el.style.color = CONFIG.colors[2]; // Green
                     el.style.display = 'block';
                 } else {
@@ -635,10 +653,106 @@ SHADE</textarea>
                     this.particles.push(new Particle(x, y, color));
                 }
             }
+
+            handleFileUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const csvText = event.target.result;
+                    const lines = csvText.split('\n').filter(line => line.trim().length > 0);
+
+                    if (lines.length < 2) {
+                        alert('CSV file is empty or invalid');
+                        return;
+                    }
+
+                    // Parse header to find column indices
+                    const header = lines[0].split(',').map(col => col.replace(/"/g, '').trim());
+                    const orderIdIndex = header.indexOf('Order ID');
+                    const billingNameIndex = header.indexOf('Billing Name');
+
+                    if (orderIdIndex === -1 || billingNameIndex === -1) {
+                        alert('CSV must contain "Order ID" and "Billing Name" columns');
+                        return;
+                    }
+
+                    const playerEntries = [];
+
+                    // Process each data row (skip header)
+                    for (let i = 1; i < lines.length; i++) {
+                        const row = this.parseCSVLine(lines[i]);
+                        if (row.length <= Math.max(orderIdIndex, billingNameIndex)) continue;
+
+                        let orderId = row[orderIdIndex].replace(/"/g, '').trim();
+                        const billingName = row[billingNameIndex].replace(/"/g, '').trim();
+
+                        if (!billingName || !orderId) continue;
+
+                        // Remove leading zeros from order ID
+                        orderId = parseInt(orderId, 10).toString();
+
+                        // Parse the name: "FirstName LastName" or "LastName FirstName"
+                        const nameParts = billingName.split(' ').filter(p => p.length > 0);
+                        if (nameParts.length === 0) continue;
+
+                        // Assume format is "FirstName LastName"
+                        const firstName = nameParts[0];
+                        const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
+                        const firstLetter = firstName.charAt(0).toUpperCase();
+
+                        // Format: "LastName F#OrderID" or "FirstName F#OrderID" if no last name
+                        const displayName = firstName ? firstName : lastName;
+                        const formattedEntry = `${displayName} ${firstLetter}#${orderId}`;
+
+                        playerEntries.push(formattedEntry);
+                    }
+
+                    if (playerEntries.length === 0) {
+                        alert('No valid player entries found in CSV');
+                        return;
+                    }
+
+                    // Add to textarea
+                    const currentText = $('name-input').value.trim();
+                    const newText = currentText ? currentText + '\n' + playerEntries.join('\n') : playerEntries.join('\n');
+                    $('name-input').value = newText;
+
+                    // Reset file input
+                    e.target.value = '';
+                };
+
+                reader.readAsText(file);
+            }
+
+            parseCSVLine(line) {
+                // Simple CSV parser that handles quoted fields
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current);
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+
+                result.push(current); // Add last field
+                return result;
+            }
         }
 
         class Player {
-            constructor(name, x, y) {
+            constructor(id, name, x, y) {
+                this.id = id; // Unique identifier for the player
                 this.name = name;
                 this.radius = CONFIG.radius;
                 this.color = randColor();
