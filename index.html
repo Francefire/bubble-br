@@ -9,6 +9,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Rubik+Glitch&display=swap" rel="stylesheet">
+    <!-- p5.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <style>
         :root {
             --bg-color: #121212;
@@ -39,8 +41,7 @@
         /* 
            LAYER SYSTEM:
            Z-0: Concrete Texture (CSS/Image)
-           Z-1: Paint Canvas (Persistent Splatters)
-           Z-2: Game Canvas (Active Players)
+           Z-2: Game Canvas (Managed by p5, set to Z-2)
            Z-10: UI Layer
         */
 
@@ -57,22 +58,12 @@
                 url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
         }
 
+        /* p5 Canvas Style */
         canvas {
+            display: block;
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-        #paint-canvas {
-            z-index: 1;
-            filter: contrast(1.2) brightness(1.1);
-            /* Make paint pop */
-        }
-
-        #game-canvas {
-            z-index: 2;
         }
 
         /* UI Overlays */
@@ -264,14 +255,228 @@
                 opacity: 1;
             }
         }
+
+        /* Debug HUD */
+        #debug-hud {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 3px solid #00FF66;
+            padding: 1.5rem;
+            z-index: 30;
+            font-family: 'Courier New', monospace;
+            min-width: 250px;
+            max-width: 400px;
+            display: none;
+            box-shadow: 0 0 20px rgba(0, 255, 102, 0.5);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        #debug-hud.visible {
+            display: block;
+        }
+
+        #debug-hud h3 {
+            color: #00FF66;
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+        }
+
+        .debug-section {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #333;
+        }
+
+        .debug-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+        .debug-label {
+            color: #888;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            margin-bottom: 0.5rem;
+        }
+
+        .debug-btn {
+            background: #00FF66;
+            color: #000;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 0.5rem;
+            transition: all 0.1s;
+        }
+
+        .debug-btn:hover {
+            background: #00F3FF;
+            transform: translateX(-2px);
+        }
+
+        .debug-btn:active {
+            transform: translateX(2px);
+        }
+
+        .debug-btn.active {
+            background: #FF0055;
+            color: #fff;
+        }
+
+        .speed-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .speed-controls .debug-btn {
+            padding: 0.4rem;
+            font-size: 0.7rem;
+            margin-bottom: 0;
+        }
+
+        .speed-display {
+            text-align: center;
+            color: #00FF66;
+            font-size: 1.2rem;
+            margin-top: 0.5rem;
+            font-weight: bold;
+        }
+
+        /* Debug Log */
+        #debug-log {
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid #333;
+            padding: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.65rem;
+            color: #00FF66;
+            margin-top: 0.5rem;
+        }
+
+        .log-entry {
+            margin-bottom: 0.25rem;
+            padding: 0.25rem;
+            border-left: 2px solid #00FF66;
+            padding-left: 0.5rem;
+            line-height: 1.2;
+        }
+
+        .log-entry.combat {
+            border-left-color: #FF0055;
+            color: #FF0055;
+        }
+
+        .log-entry.kill {
+            border-left-color: #FF6600;
+            color: #FF6600;
+        }
+
+        .log-entry.ability {
+            border-left-color: #00F3FF;
+            color: #00F3FF;
+        }
+
+        .log-entry.system {
+            border-left-color: #FFD700;
+            color: #FFD700;
+        }
+
+        .log-time {
+            color: #666;
+            font-size: 0.6rem;
+            margin-right: 0.25rem;
+        }
+
+        .debug-hint {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 255, 102, 0.1);
+            border: 1px solid #00FF66;
+            padding: 0.5rem 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.7rem;
+            color: #00FF66;
+            z-index: 25;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+
+        .debug-hint:hover {
+            opacity: 1;
+        }
+
+        /* Role Passive Indicators */
+        .role-passive {
+            position: absolute;
+            font-size: 16px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 2px solid;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 15;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 0.9;
+            }
+
+            50% {
+                transform: scale(1.1);
+                opacity: 1;
+            }
+        }
+
+        .passive-tooltip {
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: 'Courier New', monospace;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+            color: #fff;
+        }
+
+        .role-passive:hover .passive-tooltip {
+            opacity: 1;
+        }
     </style>
 </head>
 
 <body>
 
     <div id="texture-layer"></div>
-    <canvas id="paint-canvas"></canvas>
-    <canvas id="game-canvas"></canvas>
+    <!-- p5.js will inject the canvas here -->
 
     <div id="ui-layer">
         <!-- SETUP -->
@@ -308,9 +513,41 @@ SHADE</textarea>
 
     <div id="hud-top">
         <div class="counter" id="alive-cnt">5 RESTANTS</div>
-        <div id="phase-indicator">WARMUP</div>
+        <div id="phase-indicator">ECHAUFFEMENT</div>
         <div class="kill-feed" id="kill-feed"></div>
     </div>
+
+    <!-- Debug HUD -->
+    <div id="debug-hud">
+        <h3>⚙️ PANEL</h3>
+
+        <div class="debug-section">
+            <div class="debug-label">Contrôle du Jeu</div>
+            <button class="debug-btn" id="debug-pause">Pause</button>
+            <button class="debug-btn" id="debug-skip-phase2">Passer à la Phase 2</button>
+            <button class="debug-btn" id="debug-clear-canvas">Effacer le Canevas</button>
+        </div>
+
+        <div class="debug-section">
+            <div class="debug-label">Vitesse du Temps</div>
+            <div class="speed-controls">
+                <button class="debug-btn" id="debug-speed-025">0.25x</button>
+                <button class="debug-btn" id="debug-speed-05">0.5x</button>
+                <button class="debug-btn active" id="debug-speed-1">1x</button>
+                <button class="debug-btn" id="debug-speed-2">2x</button>
+                <button class="debug-btn" id="debug-speed-4">4x</button>
+                <button class="debug-btn" id="debug-speed-8">8x</button>
+            </div>
+            <div class="speed-display" id="speed-display">1.00x</div>
+        </div>
+
+        <div class="debug-section">
+            <div class="debug-label">Journal d'Action</div>
+            <div id="debug-log"></div>
+        </div>
+    </div>
+
+    <div class="debug-hint">Appuyez sur 'D' pour le Menu de Debug</div>
 
     <script>
         const CONFIG = {
@@ -321,122 +558,165 @@ SHADE</textarea>
             colors: ['#FF0055', '#00F3FF', '#39FF14', '#FFFF00', '#BE00FF', '#FF6600'],
             crews: {
                 cyan: '#00F3FF',
-                magenta: '#FF1493' // Hot Pink
+                magenta: '#FF1493'
             },
             traitorGold: '#FFD700'
         };
 
-        // Phase 2: Top 8 Champions Roles Configuration
         const ROLES = {
             ninja: { color: '#0066FF', emoji: '🥷', name: 'Ninja' },
-            trailblazer: { color: '#39FF14', emoji: '☣️', name: 'Trailblazer' },
+            webmaster: { color: '#E0E0E0', emoji: '🕸️', name: 'Maître-Toile' },
             tank: { color: '#888888', emoji: '🛡️', name: 'Tank' },
             assassin: { color: '#FF0055', emoji: '🗡️', name: 'Assassin' },
             vampire: { color: '#8B00FF', emoji: '🦇', name: 'Vampire' },
-            martyr: { color: '#FF6600', emoji: '💣', name: 'Martyr' },
-            glitch: { color: '#00F3FF', emoji: '👾', name: 'Glitch' },
-            ghost: { color: '#FFFFFF', emoji: '👻', name: 'Ghost' }
+            martyr: { color: '#FF6600', emoji: '💣', name: 'Martyre' },
+            glitch: { color: '#00F3FF', emoji: '👾', name: 'Anomalie' },
+            ghost: { color: '#FFFFFF', emoji: '👻', name: 'Fantôme' }
         };
 
         const APEX_CONFIG = {
-            ninjaSwapCooldown: 180,      // 3 seconds at 60fps
-            ninjaSwapRange: 60,          // pixels
-            glitchTeleportInterval: 240, // 4 seconds at 60fps
-            ghostInvincibleTime: 120,    // 2 seconds at 60fps
-            trailLifetime: 300,          // 5 seconds at 60fps
-            vampireAuraRadius: 100,      // pixels
-            vampireDeathChance: 0.005,   // 0.5% per frame
-            stalemateTime: 10000,        // 10 seconds in ms
-            shrinkRate: 25               // pixels per second
+            ninjaSwapCooldown: 180,
+            ninjaSwapRange: 60,
+            glitchTeleportInterval: 240,
+            ghostInvincibleTime: 120,
+            webLifetime: 4000,
+            vampireAuraRadius: 100,
+            vampireDeathChance: 0.005,
+            stalemateTime: 10000,
+            shrinkRate: 25
         };
 
-        const $ = id => document.getElementById(id);
-        const rand = (min, max) => Math.random() * (max - min) + min;
-        const randInt = (min, max) => Math.floor(rand(min, max));
-        const randColor = () => CONFIG.colors[randInt(0, CONFIG.colors.length)];
+        let game;
+        let paintLayer;
+
+        // p5.js Setup
+        function setup() {
+            let cnv = createCanvas(windowWidth, windowHeight);
+            cnv.style('z-index', '2'); // Place above texture, below UI
+            cnv.style('position', 'absolute');
+            cnv.style('top', '0');
+            cnv.style('left', '0');
+
+            // Paint layer as off-screen graphics
+            paintLayer = createGraphics(windowWidth, windowHeight);
+            paintLayer.clear(); // Make transparent
+
+            game = new Game();
+
+            // Buttons
+            select('#start-btn').mousePressed(() => game.start());
+            select('#restart-btn').mousePressed(() => game.reset());
+            select('#import-btn').mousePressed(() => select('#csv-input').elt.click());
+            select('#csv-input').changed((e) => game.handleFileUpload(e));
+
+            // Debug Controls
+            game.setupDebugControls();
+
+            frameRate(60);
+        }
+
+        // p5.js Draw Loop
+        function draw() {
+            clear(); // Clear main canvas each frame
+
+            // Draw Persistent Paint Layer
+            image(paintLayer, 0, 0);
+
+            if (game) {
+                game.update();
+                game.draw();
+            }
+        }
+
+        function windowResized() {
+            resizeCanvas(windowWidth, windowHeight);
+            // Recreating paintLayer clears it, which might be undesirable, but resizing is complex. 
+            // We'll just recreate for now or keep it fixed. 
+            // Let's try to preserve it?
+            let oldPaint = paintLayer;
+            paintLayer = createGraphics(windowWidth, windowHeight);
+            paintLayer.image(oldPaint, 0, 0);
+            if (game) game.resize(windowWidth, windowHeight);
+        }
 
         class Game {
             constructor() {
-                this.gameCanvas = $('game-canvas');
-                this.paintCanvas = $('paint-canvas');
-                this.gCtx = this.gameCanvas.getContext('2d');
-                this.pCtx = this.paintCanvas.getContext('2d');
-
-                this.width = window.innerWidth;
-                this.height = window.innerHeight;
-
+                this.width = windowWidth;
+                this.height = windowHeight;
                 this.players = [];
-                this.particles = []; // For transient effects like sparks
+                this.particles = [];
                 this.running = false;
                 this.gracePeriod = 0;
+                this.gameState = 'TEAMS';
 
-                // Slow-motion system for suspense
                 this.slowMotion = false;
-                this.slowMotionFactor = 0.3; // How slow (0.3 = 30% speed)
-                this.slowMotionDelay = 0; // Frames to wait before turning off
-                this.slowMotionDelayFrames = 30; // ~0.5 seconds at 60fps
-                this.playerDistances = new Map(); // Track previous distances
+                this.slowMotionFactor = 0.3;
+                this.slowMotionDelay = 0;
+                this.playerDistances = new Map();
 
-                this.gameState = 'TEAMS'; // 'TEAMS', 'TRANSITION', 'APEX'
-
-                // Phase 2: Circular Arena State
-                this.arenaCenter = { x: 0, y: 0 };
+                this.arenaCenter = createVector(0, 0);
                 this.arenaRadius = 0;
-                this.arenaBaseRadius = 0;
                 this.lastEliminationTime = 0;
-                this.trailblazerTrails = []; // [{x, y, playerId, timestamp}, ...]
-                this.deathOrderCounter = 0; // Track order of eliminations for resurrection
+                this.webTrails = [];
+                this.deathOrderCounter = 0;
 
-                window.addEventListener('resize', () => this.resize());
-                this.resize();
-
-                // Bind UI
-                $('start-btn').onclick = () => this.start();
-                $('restart-btn').onclick = () => this.reset();
-                $('import-btn').onclick = () => $('csv-input').click();
-                $('csv-input').onchange = (e) => this.handleFileUpload(e);
-
-                this.loop = this.loop.bind(this);
-                requestAnimationFrame(this.loop);
+                // Debug controls
+                this.paused = false;
+                this.timeSpeed = 1.0;
+                this.debugLog = [];
             }
 
-            resize() {
-                this.width = window.innerWidth;
-                this.height = window.innerHeight;
+            log(message, type = 'système') {
+                const timestamp = Math.floor(millis() / 1000);
+                const entry = { message, type, timestamp };
+                this.debugLog.push(entry);
 
-                this.gameCanvas.width = this.width;
-                this.gameCanvas.height = this.height;
+                // Update log display if debug is visible
+                const logEl = select('#debug-log');
+                if (logEl && select('#debug-hud').hasClass('visible')) {
+                    const logEntry = createDiv('');
+                    logEntry.class(`log-entry ${type}`);
+                    logEntry.html(`<span class="log-time">[${timestamp}s]</span>${message}`);
+                    logEntry.parent('debug-log');
+                    logEl.elt.insertBefore(logEntry.elt, logEl.elt.firstChild);
 
-                // We don't want to clear paint on resize usually, but for simplicity let's just resize
-                // A better approach would be to copy the old canvas, but let's keep it simple
-                this.paintCanvas.width = this.width;
-                this.paintCanvas.height = this.height;
+                    // Limit to 50 entries
+                    while (logEl.elt.children.length > 50) {
+                        logEl.elt.removeChild(logEl.elt.lastChild);
+                    }
+                }
+            }
+
+            resize(w, h) {
+                this.width = w;
+                this.height = h;
             }
 
             reset() {
                 this.running = false;
-                $('setup-panel').classList.remove('hidden');
-                $('win-overlay').classList.add('hidden');
-                $('hud-top').classList.remove('visible');
-                $('phase-indicator').style.display = 'none';
+                select('#setup-panel').removeClass('hidden');
+                select('#win-overlay').addClass('hidden');
+                select('#hud-top').removeClass('visible');
+                select('#phase-indicator').style('display', 'none');
 
-                // Clear Everything
-                this.pCtx.clearRect(0, 0, this.width, this.height);
-                this.gCtx.clearRect(0, 0, this.width, this.height);
-                $('kill-feed').innerHTML = '';
+                paintLayer.clear();
+                select('#kill-feed').html('');
             }
 
             start() {
-                const playerEntries = $('name-input').value.split('\n').filter(n => n.trim().length > 0);
-                if (playerEntries.length < 2) return alert("NEED MORE PLAYERS");
+                const input = select('#name-input').value();
+                const playerEntries = input.split('\n').filter(n => n.trim().length > 0);
+                if (playerEntries.length < 2) {
+                    alert("BESOIN DE PLUS DE JOUEURS");
+                    return;
+                }
 
                 this.players = [];
                 this.gameState = 'TEAMS';
-                this.trailblazerTrails = [];
+                this.webTrails = [];
 
-                // Shuffle names to randomize teams
-                const shuffledEntries = this.shuffleArray([...playerEntries]);
-                const mid = Math.ceil(shuffledEntries.length / 2);
+                const shuffledEntries = shuffle(playerEntries);
+                const mid = ceil(shuffledEntries.length / 2);
 
                 shuffledEntries.forEach((entry, index) => {
                     const team = index < mid ? 'cyan' : 'magenta';
@@ -451,123 +731,120 @@ SHADE</textarea>
                     }
 
                     const pos = this.getSafeSpawnPosition(this.players);
-                    if (pos) {
-                        this.players.push(new Player(id, name, pos.x, pos.y, team));
-                    } else {
-                        this.players.push(new Player(id, name, rand(100, this.width - 100), rand(100, this.height - 100), team));
-                    }
+                    let x, y;
+                    if (pos) { x = pos.x; y = pos.y; }
+                    else { x = random(100, this.width - 100); y = random(100, this.height - 100); }
+
+                    this.players.push(new Player(id, name, x, y, team));
                 });
 
-                $('setup-panel').classList.add('hidden');
-                $('hud-top').classList.add('visible');
+                select('#setup-panel').addClass('hidden');
+                select('#hud-top').addClass('visible');
                 this.updateCount();
 
-                this.gracePeriod = 300; // 5 seconds approx at 60fps
+                this.gracePeriod = 300;
                 this.updatePhaseUI();
-
                 this.running = true;
             }
 
-            updatePhaseUI() {
-                const el = $('phase-indicator');
+            update() {
+                if (!this.running || this.paused) return;
+
                 if (this.gracePeriod > 0) {
-                    el.innerText = "PREPAREZ VOUS !"; // WARMUP
-                    el.style.color = CONFIG.colors[2]; // Green
-                    el.style.display = 'block';
-                } else {
-                    el.innerText = "COMBAT"; // FIGHT
-                    el.style.color = CONFIG.colors[0]; // Red
-                    setTimeout(() => el.style.display = 'none', 1000);
+                    this.gracePeriod--;
+                    if (this.gracePeriod === 0) this.updatePhaseUI();
+                }
+
+                this.updateSlowMotion();
+
+                // Physics steps with time speed multiplier
+                const speedMultiplier = (this.slowMotion ? this.slowMotionFactor : 1.0) * this.timeSpeed;
+
+                this.players.forEach(p => p.update(this, speedMultiplier));
+                this.checkCollisions();
+
+                if (this.gameState === 'APEX') {
+                    this.updateArenaShrinking();
+                    this.updateApexMechanics();
+                }
+
+                // Update particles
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    p.update();
+                    if (p.life <= 0) this.particles.splice(i, 1);
                 }
             }
 
+            draw() {
+                if (this.gameState === 'APEX') {
+                    this.drawCircularArena();
+                    this.drawWebTrails();
+                    this.drawVampireEffects();
+                }
+
+                this.players.forEach(p => p.draw());
+
+                // Draw particles
+                push();
+                blendMode(LIGHTEST); // 'lighter' in standard canvas
+                this.particles.forEach(p => p.draw());
+                pop();
+            }
+
+            // ... Helper Methods ...
+
             getSafeSpawnPosition(existingPlayers) {
-                const maxAttempts = 100;
-                const buffer = 50; // Extra space between balls
-
-                for (let i = 0; i < maxAttempts; i++) {
-                    const x = rand(100, this.width - 100);
-                    const y = rand(100, this.height - 100);
-
+                const buffer = 50;
+                for (let i = 0; i < 100; i++) {
+                    let x = random(100, this.width - 100);
+                    let y = random(100, this.height - 100);
                     let valid = true;
+                    let pos = createVector(x, y);
                     for (let p of existingPlayers) {
-                        const dist = Math.hypot(x - p.x, y - p.y);
-                        // 2 * radius + buffer
-                        if (dist < (CONFIG.radius * 2) + buffer) {
+                        if (p.pos.dist(pos) < (CONFIG.radius * 2) + buffer) {
                             valid = false;
                             break;
                         }
                     }
-
                     if (valid) return { x, y };
                 }
-                return null; // Failed to find spot
+                return null;
             }
 
             updateCount() {
                 const alive = this.players.filter(p => !p.dead).length;
-                $('alive-cnt').innerText = `${alive} RESTANTS`;
+                select('#alive-cnt').html(`${alive} RESTANTS`);
             }
 
-            logKill(winner, loser) {
-                const div = document.createElement('div');
-                div.className = 'kill-msg';
-                div.style.borderColor = winner.color;
-                div.innerHTML = `<span style="color:${winner.color}">${winner.name}</span> SPLATTED <span style="color:#888">${loser.name}</span>`;
-                $('kill-feed').prepend(div);
+            updatePhaseUI() {
+                const el = select('#phase-indicator');
+                if (this.gracePeriod > 0) {
+                    el.html("PREPAREZ VOUS !");
+                    el.style('color', CONFIG.colors[2]);
+                    el.style('display', 'block');
+                } else {
+                    el.html("COMBAT");
+                    el.style('color', CONFIG.colors[0]);
+                    setTimeout(() => el.style('display', 'none'), 1000);
+                }
+            }
+
+            logKill(winner, loser, msg = 'A ECLATE') {
+                const div = createDiv('');
+                div.class('kill-msg');
+                div.style('border-color', winner.color);
+                div.html(`<span style="color:${winner.color}">${winner.name}</span> ${msg} <span style="color:#888">${loser.name}</span>`);
+                div.parent('kill-feed');
+                // Prepend logic manual in vanilla JS? p5 'parent' appends to end?
+                // p5 DOM doesn't have prepend cleanly without elt access.
+                const feed = select('#kill-feed');
+                feed.elt.insertBefore(div.elt, feed.elt.firstChild);
                 setTimeout(() => div.remove(), 4000);
-            }
-
-            loop() {
-                // Clear Game Canvas only (Paint persists)
-                this.gCtx.clearRect(0, 0, this.width, this.height);
-
-                if (this.running) {
-                    // Game Logic
-                    if (this.gracePeriod > 0) {
-                        this.gracePeriod--;
-                        if (this.gracePeriod === 0) this.updatePhaseUI();
-                    }
-
-                    // Check for slow-motion trigger (under 10 players)
-                    this.updateSlowMotion();
-
-                    // Apply slow-motion by running updates multiple times or adjusting speeds
-                    const updateIterations = this.slowMotion ? 1 : 1;
-                    const speedMultiplier = this.slowMotion ? this.slowMotionFactor : 1.0;
-
-                    this.players.forEach(p => p.update(this, speedMultiplier));
-                    this.checkCollisions();
-
-                    // APEX: Update arena shrinking and draw circular boundary
-                    if (this.gameState === 'APEX') {
-                        this.updateArenaShrinking();
-                        this.updateApexMechanics();
-                        this.drawCircularArena();
-                        this.drawTrailblazerTrails();
-                    }
-
-                    // Render Players
-                    this.players.forEach(p => p.draw(this.gCtx));
-                }
-
-                // Render Particles (Transient)
-                this.gCtx.globalCompositeOperation = 'lighter';
-                for (let i = this.particles.length - 1; i >= 0; i--) {
-                    const p = this.particles[i];
-                    p.update();
-                    p.draw(this.gCtx);
-                    if (p.life <= 0) this.particles.splice(i, 1);
-                }
-                this.gCtx.globalCompositeOperation = 'source-over';
-
-                requestAnimationFrame(this.loop);
             }
 
             updateSlowMotion() {
                 const active = this.players.filter(p => !p.dead);
-
-                // Only when under 10 players and combat has started, and NOT in transition
                 if (active.length >= 10 || this.gracePeriod > 0 || this.gameState === 'TRANSITION') {
                     this.slowMotion = false;
                     this.playerDistances.clear();
@@ -575,79 +852,51 @@ SHADE</textarea>
                 }
 
                 let shouldSlowDown = false;
-                const dangerThreshold = this.gameState === 'TEAMS' ? 60 : 100; // Increased distance threshold for APEX
+                const dangerThreshold = this.gameState === 'TEAMS' ? 60 : 100;
 
-                // Check all pairs of players
                 for (let i = 0; i < active.length; i++) {
                     for (let j = i + 1; j < active.length; j++) {
                         const p1 = active[i];
                         const p2 = active[j];
-
-                        // Skip slow-motion for teammates
                         if (this.gameState === 'TEAMS' && p1.team === p2.team) continue;
 
-                        const dx = p1.x - p2.x;
-                        const dy = p1.y - p2.y;
-                        const dist = Math.hypot(dx, dy);
-
-                        // Create unique pair ID
+                        const dist = p1.pos.dist(p2.pos);
                         const pairId = `${p1.id}_${p2.id}`;
                         const prevDist = this.playerDistances.get(pairId);
-
-                        // Store current distance
                         this.playerDistances.set(pairId, dist);
 
-                        // Check if players are close AND getting closer
                         if (dist < dangerThreshold && prevDist !== undefined && dist < prevDist) {
                             shouldSlowDown = true;
                         }
                     }
                 }
 
-                // Handle slow-motion state with delay
                 if (shouldSlowDown) {
                     this.slowMotion = true;
-                    this.slowMotionDelay = this.slowMotionDelayFrames; // Reset delay
+                    this.slowMotionDelay = 30;
                 } else if (this.slowMotion) {
-                    // Countdown delay before turning off
                     this.slowMotionDelay--;
-                    if (this.slowMotionDelay <= 0) {
-                        this.slowMotion = false;
-                    }
+                    if (this.slowMotionDelay <= 0) this.slowMotion = false;
                 }
             }
 
             checkCollisions() {
                 const active = this.players.filter(p => !p.dead);
-
                 for (let i = 0; i < active.length; i++) {
                     for (let j = i + 1; j < active.length; j++) {
                         const p1 = active[i];
                         const p2 = active[j];
 
-                        const dx = p1.x - p2.x;
-                        const dy = p1.y - p2.y;
-                        const dist = Math.hypot(dx, dy);
-                        const minDist = p1.radius + p2.radius;
-
-                        if (dist < minDist) {
+                        const dist = p1.pos.dist(p2.pos);
+                        if (dist < p1.radius + p2.radius) {
                             if (this.gracePeriod > 0) {
-                                // Elastic Collision (Peace Phase)
-                                this.resolveElastic(p1, p2, dx, dy, dist);
+                                this.resolveElastic(p1, p2);
                             } else {
-                                // Combat Phase - Depends on Game State
                                 if (this.gameState === 'TEAMS') {
-                                    if (p1.team === p2.team) {
-                                        this.resolveElastic(p1, p2, dx, dy, dist);
-                                    } else {
-                                        if (p1.cooldown <= 0 && p2.cooldown <= 0) {
-                                            this.resolveCombat(p1, p2);
-                                        }
-                                    }
+                                    if (p1.team === p2.team) this.resolveElastic(p1, p2);
+                                    else if (p1.cooldown <= 0 && p2.cooldown <= 0) this.resolveCombat(p1, p2);
                                 } else if (this.gameState === 'APEX') {
-                                    if (p1.cooldown <= 0 && p2.cooldown <= 0) {
-                                        this.resolveApexCombat(p1, p2);
-                                    }
+                                    if (p1.cooldown <= 0 && p2.cooldown <= 0) this.resolveApexCombat(p1, p2);
                                 }
                             }
                         }
@@ -655,510 +904,101 @@ SHADE</textarea>
                 }
             }
 
-            resolveElastic(p1, p2, dx, dy, dist) {
-                // 1. Separate circles to prevent sticky glitches
-                const overlap = (p1.radius + p2.radius - dist) / 2;
-                const offsetX = (dx / dist) * overlap;
-                const offsetY = (dy / dist) * overlap;
+            resolveElastic(p1, p2) {
+                // Vector Physics Intermission
+                let dist = p1.pos.dist(p2.pos);
+                let overlap = (p1.radius + p2.radius - dist) / 2;
+                let n = p5.Vector.sub(p1.pos, p2.pos).normalize();
 
-                p1.x += offsetX;
-                p1.y += offsetY;
-                p2.x -= offsetX;
-                p2.y -= offsetY;
+                // Separate
+                p1.pos.add(p5.Vector.mult(n, overlap));
+                p2.pos.sub(p5.Vector.mult(n, overlap));
 
-                // 2. Reflect Velocity (Elastic Collision)
-                // Normal vector
-                const nx = dx / dist;
-                const ny = dy / dist;
+                // Bounce
+                // Simple elastic collision logic for equal mass
+                let v1n = p1.vel.dot(n);
+                let v2n = p2.vel.dot(n);
 
-                // Relative velocity
-                const dvx = p1.vx - p2.vx;
-                const dvy = p1.vy - p2.vy;
+                if (v1n - v2n > 0) return; // Moving apart
 
-                // Velocity along normal
-                const velAlongNormal = dvx * nx + dvy * ny;
+                // Swap normal components (perfect elastic equal mass)
+                let v1nTag = v2n; // Tangential remains same, Normal swaps? 
+                // Wait, simpler: calculate impulse
+                // Impulse J = -(1+e)(vRel . n) / (1/m1 + 1/m2)
+                // m1=m2=1 => J = -2(vRel . n) / 2 = -(vRel . n)
 
-                // Do not resolve if velocities are separating
-                if (velAlongNormal > 0) return;
+                let vRel = p5.Vector.sub(p1.vel, p2.vel);
+                let j = -vRel.dot(n);
+                let impulse = p5.Vector.mult(n, j);
 
-                // Restitution (bounciness) 1 = perfect elastic
-                const restitution = 1;
-
-                // Impulse scalar
-                const j = -(1 + restitution) * velAlongNormal / 2; // /2 assuming equal mass
-
-                // Apply impulse
-                p1.vx += j * nx;
-                p1.vy += j * ny;
-                p2.vx -= j * nx;
-                p2.vy -= j * ny;
+                p1.vel.add(impulse);
+                p2.vel.sub(impulse);
             }
 
             resolveCombat(p1, p2) {
-                // RNG Winner
-                const winner = Math.random() > 0.5 ? p1 : p2;
+                const winner = random() > 0.5 ? p1 : p2;
                 const loser = winner === p1 ? p2 : p1;
+                this.log(`${winner.name} a combattu ${loser.name}`, 'combat');
+                this.kill(winner, loser);
+            }
 
-                // Eliminate Loser
+            kill(winner, loser, msg = 'ECLATE') {
+                if (loser.lives > 1) {
+                    loser.lives--;
+                    loser.cooldown = 30;
+                    winner.cooldown = 20;
+
+                    // Bounce both away
+                    let dir = p5.Vector.sub(winner.pos, loser.pos).normalize();
+                    winner.vel = dir.copy().mult(8);
+                    loser.vel = dir.copy().mult(-8);
+
+                    // Shield Break Effect
+                    this.spawnParticles(loser.pos.x, loser.pos.y, '#FFFFFF', 15);
+
+                    // Specific feedback msg?
+                    // Maybe not spam chat for hits, only kills.
+                    return;
+                }
+
                 loser.dead = true;
-                loser.deathOrder = ++this.deathOrderCounter; // Track when they died
+                loser.deathOrder = ++this.deathOrderCounter;
 
-                // HUGE SPLAT
-                this.drawSplat(loser.x, loser.y, loser.color, 80, 50); // Big messy splat
-                this.spawnParticles(loser.x, loser.y, loser.color, 30); // Sparks
+                this.drawSplat(loser.pos.x, loser.pos.y, loser.color, 80, 50);
+                this.spawnParticles(loser.pos.x, loser.pos.y, loser.color, 30);
 
-                // Buff Winner
                 winner.radius += 5;
                 winner.cooldown = 20;
 
-                // Bounce Winner
-                const angle = Math.atan2(winner.y - loser.y, winner.x - loser.x);
-                winner.vx = Math.cos(angle) * 8;
-                winner.vy = Math.sin(angle) * 8;
+                // Bounce Winner away
+                let dir = p5.Vector.sub(winner.pos, loser.pos).normalize();
+                winner.vel = dir.mult(8);
 
-                this.logKill(winner, loser);
+                this.log(`💀 ${winner.name} a éliminé ${loser.name}`, 'kill');
+                this.logKill(winner, loser, msg);
                 this.updateCount();
+                this.checkWin();
+            }
 
-                // Check Win conditions
+            checkWin() {
                 const active = this.players.filter(p => !p.dead);
-
                 if (this.gameState === 'TEAMS') {
-                    const teamsRemaining = new Set(active.map(p => p.team));
-                    if (teamsRemaining.size === 1) {
-                        this.transitionToPhase2();
-                    }
+                    const teams = new Set(active.map(p => p.team));
+                    if (teams.size === 1) this.transitionToPhase2();
                 } else if (this.gameState === 'APEX' && active.length === 1) {
                     this.endGame(active[0]);
                 }
             }
 
-            endGame(winner) {
-                this.running = false;
-                setTimeout(() => {
-                    $('win-title').innerHTML = winner.name + "<br>WINS";
-                    $('win-title').style.textShadow = `10px 10px 0px ${winner.color}`;
-                    $('win-overlay').classList.remove('hidden');
-                    $('win-overlay').classList.add('visible');
-
-                    // Final celebration splats
-                    for (let i = 0; i < 10; i++) {
-                        setTimeout(() => {
-                            this.drawSplat(
-                                rand(this.width * 0.2, this.width * 0.8),
-                                rand(this.height * 0.2, this.height * 0.8),
-                                winner.color, 120, 100
-                            );
-                        }, i * 200);
-                    }
-                }, 1000);
-            }
-
-            transitionToPhase2() {
-                this.gameState = 'TRANSITION';
-                const el = $('phase-indicator');
-                el.innerText = "PHASE 2";
-                el.style.color = '#FFFFFF';
-                el.style.display = 'block';
-                el.style.fontSize = '5rem';
-                el.style.width = '100%';
-                el.style.textAlign = 'center';
-
-                // Wait 3 seconds, then cull and setup arena
-                setTimeout(() => {
-                    // Get the winning team
-                    const survivors = this.players.filter(p => !p.dead);
-                    const winningTeam = survivors[0].team;
-
-                    // Get ALL players from the winning team (alive and dead)
-                    const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
-
-                    // Sort: alive players first (deathOrder=0), then most recently dead (higher deathOrder = died later)
-                    winningTeamPlayers.sort((a, b) => {
-                        // Alive players come first
-                        if (a.deathOrder === 0 && b.deathOrder !== 0) return -1;
-                        if (a.deathOrder !== 0 && b.deathOrder === 0) return 1;
-                        // Among alive, sort by radius (largest first)
-                        if (a.deathOrder === 0 && b.deathOrder === 0) return b.radius - a.radius;
-                        // Among dead, sort by deathOrder descending (most recently dead first)
-                        return b.deathOrder - a.deathOrder;
-                    });
-
-                    // Take top 8 (or all if fewer than 8)
-                    const top8 = winningTeamPlayers.slice(0, 8);
-                    const eliminated = winningTeamPlayers.slice(8);
-
-                    // Resurrect dead players in top 8
-                    top8.forEach(p => {
-                        if (p.dead) {
-                            p.dead = false;
-                            p.deathOrder = 0;
-                            p.radius = CONFIG.radius; // Reset to base size
-                            // Spawn particles to show resurrection
-                            this.spawnParticles(p.x, p.y, '#FFFFFF', 20);
-                        }
-                    });
-
-                    // Kill players not in top 8 (from winning team) with splats
-                    eliminated.forEach(p => {
-                        if (!p.dead) {
-                            p.dead = true;
-                            this.drawSplat(p.x, p.y, p.color, 60, 30);
-                        }
-                    });
-
-                    // Also mark all non-winning team players as dead (they should already be)
-                    this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
-
-                    // Assign roles to top 8
-                    const roleKeys = Object.keys(ROLES);
-                    const shuffledRoles = this.shuffleArray([...roleKeys]);
-
-                    top8.forEach((player, index) => {
-                        const roleKey = shuffledRoles[index];
-                        const role = ROLES[roleKey];
-
-                        player.role = roleKey;
-                        player.emoji = role.emoji;
-                        player.color = role.color;
-                        player.team = null; // Everyone is an enemy
-
-                        // Role-specific initialization
-                        if (roleKey === 'tank') {
-                            player.lives = 3;
-                        }
-                        player.ninjaSwapCooldown = 0;
-                        player.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
-                        player.ghostInvincible = false;
-                        player.ghostInvincibleTime = 0;
-                        player.trailPoints = []; // For trailblazer
-
-                        // Teleport to center
-                        player.x = this.width / 2 + rand(-30, 30);
-                        player.y = this.height / 2 + rand(-30, 30);
-
-                        // Give random velocity
-                        const angle = Math.random() * Math.PI * 2;
-                        const speed = rand(CONFIG.minSpeed, CONFIG.maxSpeed);
-                        player.vx = Math.cos(angle) * speed;
-                        player.vy = Math.sin(angle) * speed;
-                    });
-
-                    // Setup circular arena
-                    this.arenaCenter = { x: this.width / 2, y: this.height / 2 };
-                    this.arenaBaseRadius = this.height * 0.50;
-                    this.arenaRadius = this.arenaBaseRadius;
-                    this.lastEliminationTime = Date.now();
-
-                    this.updateCount();
-
-                    el.innerText = "THE APEX ARENA";
-                    el.style.color = '#FFD700';
-                    setTimeout(() => {
-                        el.style.display = 'none';
-                        this.gameState = 'APEX';
-                    }, 2000);
-                }, 3000);
-            }
-
-            updateArenaShrinking() {
-                const now = Date.now();
-                if (now - this.lastEliminationTime > APEX_CONFIG.stalemateTime) {
-                    // Shrink the arena
-                    const shrinkPerFrame = APEX_CONFIG.shrinkRate * (16 / 1000); // ~16ms per frame
-                    this.arenaRadius = Math.max(80, this.arenaRadius - shrinkPerFrame);
-                }
-            }
-
-            updateApexMechanics() {
-                const active = this.players.filter(p => !p.dead && p.role);
-                const now = Date.now();
-
-                active.forEach(player => {
-                    // Glitch teleportation
-                    if (player.role === 'glitch') {
-                        player.glitchTeleportCooldown--;
-                        if (player.glitchTeleportCooldown <= 0) {
-                            // Teleport to random position inside circle
-                            const angle = Math.random() * Math.PI * 2;
-                            const dist = Math.random() * (this.arenaRadius - player.radius - 20);
-                            player.x = this.arenaCenter.x + Math.cos(angle) * dist;
-                            player.y = this.arenaCenter.y + Math.sin(angle) * dist;
-                            player.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
-                            this.spawnParticles(player.x, player.y, player.color, 15);
-                        }
-                    }
-
-                    // Ninja swap detection
-                    if (player.role === 'ninja' && player.ninjaSwapCooldown <= 0) {
-                        for (const other of active) {
-                            if (other === player || other.ghostInvincible) continue;
-                            const dist = Math.hypot(player.x - other.x, player.y - other.y);
-                            if (dist < APEX_CONFIG.ninjaSwapRange) {
-                                // Swap positions
-                                const tempX = player.x, tempY = player.y;
-                                player.x = other.x;
-                                player.y = other.y;
-                                other.x = tempX;
-                                other.y = tempY;
-                                player.ninjaSwapCooldown = APEX_CONFIG.ninjaSwapCooldown;
-                                this.spawnParticles(player.x, player.y, player.color, 10);
-                                this.spawnParticles(other.x, other.y, player.color, 10);
-                                break;
-                            }
-                        }
-                    }
-                    if (player.ninjaSwapCooldown > 0) player.ninjaSwapCooldown--;
-
-                    // Vampire aura
-                    if (player.role === 'vampire') {
-                        for (const other of active) {
-                            if (other === player || other.ghostInvincible) continue;
-                            const dist = Math.hypot(player.x - other.x, player.y - other.y);
-                            if (dist < APEX_CONFIG.vampireAuraRadius) {
-                                if (Math.random() < APEX_CONFIG.vampireDeathChance) {
-                                    // Heart attack!
-                                    this.killPlayer(other, player, 'HEART ATTACK');
-                                }
-                            }
-                        }
-                    }
-
-                    // Trailblazer trail
-                    if (player.role === 'trailblazer') {
-                        // Add current position to trail
-                        this.trailblazerTrails.push({
-                            x: player.x,
-                            y: player.y,
-                            playerId: player.id,
-                            timestamp: now,
-                            color: player.color
-                        });
-
-                        // Check if enemies touch trail
-                        for (const other of active) {
-                            if (other === player || other.ghostInvincible) continue;
-                            for (const point of this.trailblazerTrails) {
-                                if (point.playerId === player.id) {
-                                    const dist = Math.hypot(other.x - point.x, other.y - point.y);
-                                    if (dist < other.radius + 5) {
-                                        this.killPlayer(other, player, 'TOXIC TRAIL');
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Ghost invincibility countdown
-                    if (player.ghostInvincible) {
-                        player.ghostInvincibleTime--;
-                        if (player.ghostInvincibleTime <= 0) {
-                            player.ghostInvincible = false;
-                        }
-                    }
-                });
-
-                // Clean up old trail points
-                this.trailblazerTrails = this.trailblazerTrails.filter(
-                    point => now - point.timestamp < APEX_CONFIG.trailLifetime * (1000 / 60)
-                );
-            }
-
-            killPlayer(victim, killer, deathMessage = 'SPLATTED') {
-                if (victim.dead || victim.ghostInvincible) return;
-
-                // Ghost survival chance
-                if (victim.role === 'ghost' && Math.random() < 0.5) {
-                    victim.ghostInvincible = true;
-                    victim.ghostInvincibleTime = APEX_CONFIG.ghostInvincibleTime;
-                    this.spawnParticles(victim.x, victim.y, '#FFFFFF', 20);
-                    return; // Survived!
-                }
-
-                // Tank multi-life
-                if (victim.role === 'tank' && victim.lives > 1) {
-                    victim.lives--;
-                    victim.radius = Math.max(15, victim.radius - 5);
-                    this.spawnParticles(victim.x, victim.y, victim.color, 15);
-                    return; // Survived!
-                }
-
-                // Actually die
-                victim.dead = true;
-                this.drawSplat(victim.x, victim.y, victim.color, 80, 50);
-                this.spawnParticles(victim.x, victim.y, victim.color, 30);
-
-                // Log kill with custom message
-                const div = document.createElement('div');
-                div.className = 'kill-msg';
-                div.style.borderColor = killer.color;
-                div.innerHTML = `<span style="color:${killer.color}">${killer.emoji} ${killer.name}</span> ${deathMessage} <span style="color:#888">${victim.emoji} ${victim.name}</span>`;
-                $('kill-feed').prepend(div);
-                setTimeout(() => div.remove(), 4000);
-
-                // Martyr revenge
-                if (victim.role === 'martyr' && killer && killer !== victim) {
-                    setTimeout(() => {
-                        if (!killer.dead) {
-                            killer.dead = true;
-                            this.drawSplat(killer.x, killer.y, '#FF6600', 100, 60);
-                            this.spawnParticles(killer.x, killer.y, '#FF6600', 40);
-
-                            const vengDiv = document.createElement('div');
-                            vengDiv.className = 'kill-msg';
-                            vengDiv.style.borderColor = '#FF6600';
-                            vengDiv.innerHTML = `<span style="color:#FF6600">💣 ${victim.name}</span> MARTYRDOM <span style="color:#888">${killer.emoji} ${killer.name}</span>`;
-                            $('kill-feed').prepend(vengDiv);
-                            setTimeout(() => vengDiv.remove(), 4000);
-                            this.updateCount();
-                        }
-                    }, 100);
-                }
-
-                // Buff killer
-                if (killer && killer !== victim) {
-                    killer.radius += 3;
-                    killer.cooldown = 20;
-                }
-
-                this.lastEliminationTime = Date.now();
-                this.updateCount();
-
-                // Check win condition
-                const active = this.players.filter(p => !p.dead);
-                if (active.length === 1) {
-                    this.endGame(active[0]);
-                }
-            }
-
-            resolveApexCombat(p1, p2) {
-                // Skip if either is invincible (ghost)
-                if (p1.ghostInvincible || p2.ghostInvincible) {
-                    // Just elastic bounce
-                    const dx = p1.x - p2.x;
-                    const dy = p1.y - p2.y;
-                    const dist = Math.hypot(dx, dy);
-                    this.resolveElastic(p1, p2, dx, dy, dist);
-                    return;
-                }
-
-                // Calculate win probability
-                let p1WinChance = 0.5;
-                let p2WinChance = 0.5;
-
-                if (p1.role === 'assassin') p1WinChance = 0.8;
-                if (p2.role === 'assassin') p2WinChance = 0.8;
-
-                // Normalize
-                const total = p1WinChance + p2WinChance;
-                p1WinChance /= total;
-
-                const winner = Math.random() < p1WinChance ? p1 : p2;
-                const loser = winner === p1 ? p2 : p1;
-
-                this.killPlayer(loser, winner);
-
-                // Bounce winner away
-                const angle = Math.atan2(winner.y - loser.y, winner.x - loser.x);
-                winner.vx = Math.cos(angle) * 8;
-                winner.vy = Math.sin(angle) * 8;
-            }
-
-            drawCircularArena() {
-                const ctx = this.gCtx;
-                const cx = this.arenaCenter.x;
-                const cy = this.arenaCenter.y;
-                const r = this.arenaRadius;
-
-                ctx.save();
-                ctx.shadowBlur = 15;
-                ctx.shadowColor = '#FFFFFF';
-
-                // Draw jagged chalk circle - multiple layers
-                for (let layer = 0; layer < 2; layer++) {
-                    ctx.strokeStyle = layer === 0 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
-                    ctx.lineWidth = layer === 0 ? 4 : 8;
-                    ctx.beginPath();
-
-                    const segments = 60;
-                    const jitter = layer === 0 ? 4 : 8;
-
-                    for (let i = 0; i <= segments; i++) {
-                        const angle = (i / segments) * Math.PI * 2;
-                        const jitterR = r + rand(-jitter, jitter);
-                        const px = cx + Math.cos(angle) * jitterR;
-                        const py = cy + Math.sin(angle) * jitterR;
-
-                        if (i === 0) {
-                            ctx.moveTo(px, py);
-                        } else {
-                            ctx.lineTo(px, py);
-                        }
-                    }
-
-                    ctx.closePath();
-                    ctx.stroke();
-                }
-
-                // Draw shrinking indicator if shrinking
-                const now = Date.now();
-                if (now - this.lastEliminationTime > APEX_CONFIG.stalemateTime) {
-                    ctx.strokeStyle = 'rgba(255,0,0,0.6)';
-                    ctx.lineWidth = 2;
-                    ctx.setLineDash([10, 10]);
-                    ctx.beginPath();
-                    ctx.arc(cx, cy, r - 20, 0, Math.PI * 2);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-                }
-
-                ctx.restore();
-            }
-
-            drawTrailblazerTrails() {
-                if (this.trailblazerTrails.length === 0) return;
-
-                const ctx = this.gCtx;
-                ctx.save();
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = ROLES.trailblazer.color;
-
-                this.trailblazerTrails.forEach(point => {
-                    const age = (Date.now() - point.timestamp) / (APEX_CONFIG.trailLifetime * (1000 / 60));
-                    const alpha = 1 - age;
-                    ctx.globalAlpha = alpha * 0.7;
-                    ctx.fillStyle = point.color;
-                    ctx.beginPath();
-                    ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-
-                ctx.globalAlpha = 1;
-                ctx.restore();
-            }
-
             drawSplat(x, y, color, size, count) {
-                const ctx = this.pCtx;
-                ctx.fillStyle = color;
-
-                // Main blob
-                ctx.beginPath();
-                ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Random splatters around
+                paintLayer.noStroke();
+                paintLayer.fill(color);
+                paintLayer.circle(x, y, size * 0.4);
                 for (let i = 0; i < count; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const dist = Math.random() * size;
-                    const r = Math.random() * (size * 0.2);
-
-                    ctx.beginPath();
-                    ctx.arc(
-                        x + Math.cos(angle) * dist,
-                        y + Math.sin(angle) * dist,
-                        r, 0, Math.PI * 2
-                    );
-                    ctx.fill();
+                    let r = random(size * 0.2);
+                    let angle = random(TWO_PI);
+                    let dist = random(size);
+                    paintLayer.circle(x + cos(angle) * dist, y + sin(angle) * dist, r);
                 }
             }
 
@@ -1169,7 +1009,8 @@ SHADE</textarea>
             }
 
             async handleFileUpload(e) {
-                const files = Array.from(e.target.files);
+                const fileInput = select('#csv-input').elt;
+                const files = Array.from(fileInput.files);
                 if (files.length === 0) return;
 
                 const allPlayerEntries = [];
@@ -1191,7 +1032,7 @@ SHADE</textarea>
                     const billingNameIndex = header.indexOf('Billing Name');
 
                     if (orderIdIndex === -1 || billingNameIndex === -1) {
-                        console.warn(`File ${file.name} missing required columns.`);
+                        console.warn(`Le fichier ${file.name} n'a pas les colonnes requises.`);
                         continue;
                     }
 
@@ -1224,26 +1065,24 @@ SHADE</textarea>
                 }
 
                 if (allPlayerEntries.length === 0) {
-                    alert('No valid player entries found in selected files');
+                    alert('Aucune entrée de joueur valide trouvée dans les fichiers sélectionnés');
                 } else {
-                    const currentText = $('name-input').value.trim();
+                    const currentText = select('#name-input').value();
                     const newText = currentText ? currentText + '\n' + allPlayerEntries.join('\n') : allPlayerEntries.join('\n');
-                    $('name-input').value = newText;
+                    select('#name-input').value(newText);
                 }
 
                 // Reset file input
-                e.target.value = '';
+                fileInput.value = '';
             }
 
             parseCSVLine(line) {
-                // Simple CSV parser that handles quoted fields
                 const result = [];
                 let current = '';
                 let inQuotes = false;
 
                 for (let i = 0; i < line.length; i++) {
                     const char = line[i];
-
                     if (char === '"') {
                         inQuotes = !inQuotes;
                     } else if (char === ',' && !inQuotes) {
@@ -1253,199 +1092,722 @@ SHADE</textarea>
                         current += char;
                     }
                 }
-
-                result.push(current); // Add last field
+                result.push(current);
                 return result;
             }
 
-            shuffleArray(array) {
-                for (let i = array.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [array[i], array[j]] = [array[j], array[i]];
+            transitionToPhase2() {
+                this.gameState = 'TRANSITION';
+                const el = select('#phase-indicator');
+                el.html("PHASE 2");
+                el.style('color', '#FFFFFF');
+                el.style('display', 'block');
+                el.style('font-size', '5rem');
+                el.style('width', '100%');
+                el.style('text-align', 'center');
+
+                setTimeout(() => {
+                    const survivors = this.players.filter(p => !p.dead);
+                    const winningTeam = survivors[0].team;
+                    const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
+
+                    winningTeamPlayers.sort((a, b) => {
+                        if (!a.dead && b.dead) return -1;
+                        if (a.dead && !b.dead) return 1;
+                        if (!a.dead) return b.radius - a.radius;
+                        return b.deathOrder - a.deathOrder;
+                    });
+
+                    const top8 = winningTeamPlayers.slice(0, 8);
+                    const eliminated = winningTeamPlayers.slice(8);
+
+                    top8.forEach(p => {
+                        if (p.dead) {
+                            p.dead = false;
+                            p.radius = CONFIG.radius;
+                            this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
+                        }
+                    });
+
+                    eliminated.forEach(p => {
+                        if (!p.dead) {
+                            p.dead = true;
+                            this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
+                        }
+                    });
+
+                    this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
+
+                    const roleKeys = shuffle(Object.keys(ROLES));
+                    top8.forEach((p, idx) => {
+                        const key = roleKeys[idx];
+                        const role = ROLES[key];
+                        p.role = key;
+                        p.emoji = role.emoji;
+                        p.color = role.color;
+                        p.team = null;
+                        p.team = null;
+                        // p.pos = createVector(this.width / 2 + random(-30, 30), this.height / 2 + random(-30, 30)); 
+                        // REMOVED: Don't teleport, let zone push them in.
+                        p.vel = p5.Vector.random2D().mult(random(CONFIG.minSpeed, CONFIG.maxSpeed));
+
+                        if (key === 'tank') p.lives = 3;
+                        p.ninjaSwapCooldown = 0;
+                        p.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
+                    });
+
+                    this.arenaCenter = createVector(this.width / 2, this.height / 2);
+                    this.arenaRadius = max(this.width, this.height) * 1.2; // Start BIG (Standard BR style)
+                    this.lastEliminationTime = millis();
+
+                    el.html("L'ARÈNE SUPRÊME");
+                    el.style('color', '#FFD700');
+                    setTimeout(() => {
+                        el.style('display', 'none');
+                        this.gameState = 'APEX';
+                        this.updateCount();
+                    }, 2000);
+
+                }, 3000);
+            }
+
+            updateArenaShrinking() {
+                // Shrink constantly like a normal BR zone closing in
+                // Speed up slightly if it's huge?
+                let currentRate = APEX_CONFIG.shrinkRate;
+                if (this.arenaRadius > this.height) currentRate *= 2;
+
+                this.arenaRadius = max(80, this.arenaRadius - (currentRate * (deltaTime / 1000)));
+            }
+
+            drawCircularArena() {
+                const r = this.arenaRadius;
+                push();
+                noFill();
+                strokeWeight(4);
+                stroke(255, 255, 255, 230);
+                drawingContext.shadowBlur = 15;
+                drawingContext.shadowColor = '#FFFFFF';
+
+                // Jagged circle
+                beginShape();
+                for (let a = 0; a < TWO_PI; a += 0.1) {
+                    let off = random(-4, 4);
+                    let x = this.arenaCenter.x + cos(a) * (r + off);
+                    let y = this.arenaCenter.y + sin(a) * (r + off);
+                    vertex(x, y);
                 }
-                return array;
+                endShape(CLOSE);
+
+                // Shrink warning
+                if (millis() - this.lastEliminationTime > APEX_CONFIG.stalemateTime) {
+                    stroke(255, 0, 0, 150);
+                    setLineDash([10, 10]);
+                    circle(this.arenaCenter.x, this.arenaCenter.y, (r - 20) * 2);
+                }
+                pop();
+            }
+
+            updateApexMechanics() {
+                // Simplified mechanics port
+                const active = this.players.filter(p => !p.dead && p.role);
+                active.forEach(p => {
+                    if (p.role === 'ninja') {
+                        if (p.ninjaSwapCooldown > 0) p.ninjaSwapCooldown--;
+
+                        if (p.ninjaSwapCooldown <= 0) {
+                            // Find nearest other active player within range
+                            let nearest = null;
+                            let minDist = APEX_CONFIG.ninjaSwapRange;
+
+                            active.forEach(other => {
+                                if (p === other) return;
+                                let d = p.pos.dist(other.pos);
+                                if (d < minDist) {
+                                    minDist = d;
+                                    nearest = other;
+                                }
+                            });
+
+                            if (nearest) {
+                                // Swap positions
+                                let tempPos = p.pos.copy();
+                                p.pos.set(nearest.pos);
+                                nearest.pos.set(tempPos);
+
+                                p.ninjaSwapCooldown = APEX_CONFIG.ninjaSwapCooldown;
+                                this.spawnParticles(p.pos.x, p.pos.y, p.color, 15);
+                                this.spawnParticles(nearest.pos.x, nearest.pos.y, nearest.color, 15);
+                                this.log(`🥷 ${p.name} a échangé avec ${nearest.name}`, 'capacité');
+                            }
+                        }
+                    }
+                    if (p.role === 'glitch') {
+                        p.glitchTeleportCooldown--;
+                        if (p.glitchTeleportCooldown <= 0) {
+                            let angle = random(TWO_PI);
+                            let dist = random(this.arenaRadius - 40);
+                            p.pos.set(this.arenaCenter.x + cos(angle) * dist, this.arenaCenter.y + sin(angle) * dist);
+                            p.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
+                            this.spawnParticles(p.pos.x, p.pos.y, p.color, 15);
+                            this.log(`👾 ${p.name} s'est téléporté`, 'capacité');
+                        }
+                    }
+                    if (p.role === 'webmaster') {
+                        this.webTrails.push({
+                            pos: p.pos.copy(),
+                            timestamp: millis(),
+                            color: p.color,
+                            id: p.id,
+                            sourcePlayer: p // Store reference to the webmaster
+                        });
+                    }
+                });
+
+                // Trail cleanup
+                this.webTrails = this.webTrails.filter(t => millis() - t.timestamp < APEX_CONFIG.webLifetime);
+
+                // Trail collision (Slow instead of Kill)
+                active.forEach(p => {
+                    if (p.role === 'webmaster' || p.ghostInvincible) return;
+                    for (let t of this.webTrails) {
+                        if (t.id !== p.id && p.pos.dist(t.pos) < p.radius) {
+                            p.webSlowTimer = 10; // Apply slow
+                            p.webSlowSource = t.sourcePlayer; // Track who's slowing us
+                            break;
+                        }
+                    }
+                });
+
+                // Vampire Logic
+                active.forEach(p => {
+                    if (p.role === 'vampire') {
+                        active.forEach(victim => {
+                            if (p === victim || victim.ghostInvincible) return;
+                            if (p.pos.dist(victim.pos) <= APEX_CONFIG.vampireAuraRadius) {
+                                // Chance to kill (Drain Life)
+                                if (random() < APEX_CONFIG.vampireDeathChance) {
+                                    this.log(`🦇 ${p.name} a drainé ${victim.name}`, 'capacité');
+                                    this.kill(p, victim, 'DRAINE');
+                                }
+                            }
+                        });
+                    }
+                });
+            }
+
+            drawWebTrails() {
+                push();
+                noStroke();
+                strokeWeight(16);
+                noFill();
+                strokeCap(ROUND);
+
+                // Draw as connected lines
+                if (this.webTrails.length > 1) {
+                    for (let i = 0; i < this.webTrails.length - 1; i++) {
+                        let t1 = this.webTrails[i];
+                        let t2 = this.webTrails[i + 1];
+
+                        // Break line if distance is too big (teleport) or different player
+                        if (t1.id !== t2.id || t1.pos.dist(t2.pos) > 100) continue;
+
+                        let age = millis() - t1.timestamp;
+                        let alpha = map(age, 0, APEX_CONFIG.webLifetime, 100, 0);
+
+                        let c = color(t1.color);
+                        c.setAlpha(alpha);
+                        stroke(c);
+
+                        line(t1.pos.x, t1.pos.y, t2.pos.x, t2.pos.y);
+                    }
+                }
+                pop();
+                pop();
+            }
+
+            drawVampireEffects() {
+                const vampires = this.players.filter(p => !p.dead && p.role === 'vampire');
+                if (vampires.length === 0) return;
+
+                push();
+                vampires.forEach(v => {
+                    // Draw Aura
+                    noFill();
+                    stroke(v.color);
+                    strokeWeight(2);
+                    drawingContext.setLineDash([5, 5]);
+
+                    // Rotate aura
+                    push();
+                    translate(v.pos.x, v.pos.y);
+                    rotate(millis() / 500);
+                    circle(0, 0, APEX_CONFIG.vampireAuraRadius * 2);
+                    pop();
+
+                    drawingContext.setLineDash([]);
+
+                    // Draw Drain Lines to close enemies
+                    this.players.filter(p => !p.dead && p !== v).forEach(victim => {
+                        let d = v.pos.dist(victim.pos);
+                        if (d < APEX_CONFIG.vampireAuraRadius) {
+                            // Red drain beam
+                            stroke(255, 0, 0, 150);
+                            strokeWeight(map(d, 0, APEX_CONFIG.vampireAuraRadius, 8, 1));
+                            line(v.pos.x, v.pos.y, victim.pos.x, victim.pos.y);
+
+                            // Particles towards vampire
+                            fill(255, 0, 0);
+                            noStroke();
+                            let t = millis() / 100;
+                            let count = 3;
+                            for (let i = 0; i < count; i++) {
+                                let lerpVal = (t + i / count) % 1;
+                                let px = lerp(victim.pos.x, v.pos.x, lerpVal);
+                                let py = lerp(victim.pos.y, v.pos.y, lerpVal);
+                                circle(px, py, 6);
+                            }
+                        }
+                    });
+                });
+                pop();
+            }
+
+            resolveApexCombat(p1, p2) {
+                if (p1.ghostInvincible || p2.ghostInvincible) {
+                    this.resolveElastic(p1, p2);
+                    return;
+                }
+                // Base 50/50 combat
+                let p1Win = 0.5;
+
+                // Assassin logic with degrading win rate
+                if (p1.role === 'assassin') {
+                    p1Win = p1.assassinWinChance;
+                }
+                if (p2.role === 'assassin') {
+                    p1Win = 1 - p2.assassinWinChance;
+                }
+
+                let winner = random() < p1Win ? p1 : p2;
+                let loser = winner === p1 ? p2 : p1;
+
+                // Degrade assassin's win chance after each fight
+                if (winner.role === 'assassin') {
+                    winner.assassinFightsCount++;
+                    const oldChance = winner.assassinWinChance;
+                    winner.assassinWinChance = max(0.08, 0.8 - (winner.assassinFightsCount * 0.12));
+                    this.log(`🗡️ ${winner.name} assassin dégradé : ${Math.round(oldChance * 100)}% → ${Math.round(winner.assassinWinChance * 100)}%`, 'capacité');
+                    // Visual feedback for degradation
+                    this.spawnParticles(winner.pos.x, winner.pos.y, '#FF0055', 8);
+                }
+                if (loser.role === 'assassin') {
+                    loser.assassinFightsCount++;
+                    loser.assassinWinChance = max(0.08, 0.8 - (loser.assassinFightsCount * 0.12));
+                }
+
+                this.kill(winner, loser);
+            }
+
+            endGame(winner) {
+                this.running = false;
+                setTimeout(() => {
+                    select('#win-title').html(winner.name + "<br>GAGNE");
+                    select('#win-title').style('text-shadow', `10px 10px 0px ${winner.color}`);
+                    select('#win-overlay').removeClass('hidden');
+                    select('#win-overlay').addClass('visible');
+                }, 1000);
+            }
+
+            setupDebugControls() {
+                // Toggle debug HUD with 'D' key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'd' || e.key === 'D') {
+                        select('#debug-hud').toggleClass('visible');
+                    }
+                });
+
+                // Pause/Resume
+                select('#debug-pause').mousePressed(() => {
+                    this.paused = !this.paused;
+                    const btn = select('#debug-pause');
+                    if (this.paused) {
+                        btn.html('Resume');
+                        btn.addClass('active');
+                    } else {
+                        btn.html('Pause');
+                        btn.removeClass('active');
+                    }
+                });
+
+                // Skip to Phase 2
+                select('#debug-skip-phase2').mousePressed(() => {
+                    if (!this.running) {
+                        alert('Commencez le jeu d\'abord !');
+                        return;
+                    }
+                    if (this.gameState !== 'TEAMS') {
+                        alert('Déjà après la Phase 1 !');
+                        return;
+                    }
+                    this.log('🎯 PHASE 2 : Le Top 8 avance vers l\'Arène Suprême', 'système');
+                    this.transitionToPhase2();
+                });
+
+                // Clear Canvas
+                select('#debug-clear-canvas').mousePressed(() => {
+                    paintLayer.clear();
+                    this.log('🧹 Canevas effacé', 'système');
+                });
+
+                // Speed controls
+                const speeds = [
+                    { id: 'debug-speed-025', value: 0.25 },
+                    { id: 'debug-speed-05', value: 0.5 },
+                    { id: 'debug-speed-1', value: 1.0 },
+                    { id: 'debug-speed-2', value: 2.0 },
+                    { id: 'debug-speed-4', value: 4.0 },
+                    { id: 'debug-speed-8', value: 8.0 }
+                ];
+
+                speeds.forEach(({ id, value }) => {
+                    select(`#${id}`).mousePressed(() => {
+                        this.timeSpeed = value;
+                        // Update button states
+                        speeds.forEach(s => select(`#${s.id}`).removeClass('active'));
+                        select(`#${id}`).addClass('active');
+                        // Update display
+                        select('#speed-display').html(`${value.toFixed(2)}x`);
+                    });
+                });
             }
         }
 
         class Player {
-            constructor(id, name, x, y, team = null) {
+            constructor(id, name, x, y, team) {
                 this.id = id;
                 this.name = name;
+                this.pos = createVector(x, y);
+                this.vel = p5.Vector.random2D().mult(random(CONFIG.minSpeed, CONFIG.maxSpeed));
                 this.radius = CONFIG.radius;
                 this.team = team;
-                this.color = team ? CONFIG.crews[team] : randColor();
-                this.x = x;
-                this.y = y;
-
-                const angle = Math.random() * Math.PI * 2;
-                const speed = rand(CONFIG.minSpeed, CONFIG.maxSpeed);
-                this.vx = Math.cos(angle) * speed;
-                this.vy = Math.sin(angle) * speed;
+                this.color = team ? CONFIG.crews[team] : random(CONFIG.colors);
 
                 this.dead = false;
                 this.cooldown = 0;
-                this.deathOrder = 0; // 0 = alive, higher = died earlier
-
-                // Phase 2: Role properties
                 this.role = null;
                 this.emoji = '';
                 this.lives = 1;
-                this.ninjaSwapCooldown = 0;
-                this.glitchTeleportCooldown = 0;
                 this.ghostInvincible = false;
-                this.ghostInvincibleTime = 0;
+                this.glitchTeleportCooldown = 0;
+                this.webSlowTimer = 0;
+                this.webSlowSource = null; // Track which player is slowing us
+                this.prevPos = this.pos.copy();
+
+                // Assassin degrading win chance
+                this.assassinWinChance = 0.8; // Start at 80%
+                this.assassinFightsCount = 0;
             }
 
-            update(game, speedMultiplier = 1.0) {
+            update(game, speedMult) {
                 if (this.dead) return;
 
-                // Move (with slow-motion support)
-                this.x += this.vx * speedMultiplier;
-                this.y += this.vy * speedMultiplier;
-
-                // Boundary handling depends on game state
-                if (game.gameState === 'APEX' && game.arenaRadius > 0) {
-                    // CIRCULAR BOUNDARY - Bounce off inside of circle
-                    const dx = this.x - game.arenaCenter.x;
-                    const dy = this.y - game.arenaCenter.y;
-                    const dist = Math.hypot(dx, dy);
-
-                    if (dist + this.radius > game.arenaRadius) {
-                        // Calculate normal (pointing toward center)
-                        const nx = -dx / dist;
-                        const ny = -dy / dist;
-
-                        // Position: push back inside
-                        const overflow = dist + this.radius - game.arenaRadius;
-                        this.x += nx * overflow;
-                        this.y += ny * overflow;
-
-                        // Reflect velocity off the tangent (bounce)
-                        const dot = this.vx * nx + this.vy * ny;
-                        this.vx -= 2 * dot * nx;
-                        this.vy -= 2 * dot * ny;
-                    }
-                } else {
-                    // RECTANGULAR BOUNDARY - Standard wall bounce
-                    if (this.x < this.radius) { this.x = this.radius; this.vx *= -1; }
-                    if (this.x > game.width - this.radius) { this.x = game.width - this.radius; this.vx *= -1; }
-                    if (this.y < this.radius) { this.y = this.radius; this.vy *= -1; }
-                    if (this.y > game.height - this.radius) { this.y = game.height - this.radius; this.vy *= -1; }
+                // Web Slow Effect
+                if (this.webSlowTimer > 0) {
+                    speedMult *= 0.2;
+                    this.webSlowTimer--;
                 }
 
-                // Paint Trail (Frequency check to save perf if needed, but per-frame is smoother)
-                if (Math.random() > 0.1) {
-                    game.pCtx.fillStyle = this.color;
-                    game.pCtx.beginPath();
-                    game.pCtx.arc(this.x, this.y, this.radius * 0.8, 0, Math.PI * 2);
-                    game.pCtx.fill();
+                this.prevPos.set(this.pos); // Store previous position
+                this.pos.add(p5.Vector.mult(this.vel, speedMult));
 
-                    // Occasional drip
-                    if (Math.random() > 0.9) {
-                        game.pCtx.beginPath();
-                        game.pCtx.arc(
-                            this.x + rand(-10, 10),
-                            this.y + rand(-10, 10),
-                            rand(2, 6), 0, Math.PI * 2
-                        );
-                        game.pCtx.fill();
+                // Boundary
+                // Screen Boundary (Always Active)
+                if (this.pos.x < this.radius) { this.pos.x = this.radius; this.vel.x *= -1; }
+                if (this.pos.x > width - this.radius) { this.pos.x = width - this.radius; this.vel.x *= -1; }
+                if (this.pos.y < this.radius) { this.pos.y = this.radius; this.vel.y *= -1; }
+                if (this.pos.y > height - this.radius) { this.pos.y = height - this.radius; this.vel.y *= -1; }
+
+                // Zone Boundary (APEX Mode Only)
+                if (game.gameState === 'APEX' && game.arenaRadius > 0) {
+                    let center = game.arenaCenter;
+                    let dist = this.pos.dist(center);
+                    if (dist + this.radius > game.arenaRadius) {
+                        let n = p5.Vector.sub(center, this.pos).normalize();
+                        let overflow = dist + this.radius - game.arenaRadius;
+
+                        // Push back inside zone
+                        this.pos.add(p5.Vector.mult(n, overflow));
+
+                        // Reflect velocity (bounce off zone wall)
+                        this.vel.reflect(n);
                     }
                 }
 
                 if (this.cooldown > 0) this.cooldown--;
+
+                // Paint trail (Continuous Stroke)
+                // Paint trail (Continuous Stroke)
+                let d = this.prevPos.dist(this.pos);
+                if (d < this.radius * 2) { // Only draw if moved a reasonable distance (prevents teleport streaks)
+                    let c = color(this.color);
+                    c.setAlpha(60); // Low opacity for spray paint effect
+
+                    paintLayer.stroke(c);
+                    paintLayer.strokeWeight(this.radius * 0.8 * 2);
+                    paintLayer.strokeCap(ROUND);
+                    // Use lines to avoid "dots"
+                    paintLayer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
+                }
+
+                // Occasional drip
+                if (random() > 0.95) {
+                    let c = color(this.color);
+                    c.setAlpha(60);
+                    paintLayer.noStroke();
+                    paintLayer.fill(c);
+                    paintLayer.circle(
+                        this.pos.x + random(-10, 10),
+                        this.pos.y + random(-10, 10),
+                        random(2, 6) * 2
+                    );
+                }
             }
 
-            draw(ctx) {
+            draw() {
                 if (this.dead) return;
+                push();
+                translate(this.pos.x, this.pos.y);
 
-                // Draw Character (Spray Can Top look)
-                ctx.save();
-                ctx.translate(this.x, this.y);
+                if (this.ghostInvincible) drawingContext.globalAlpha = 0.3;
 
-                // Ghost transparency when invincible
-                if (this.ghostInvincible) {
-                    ctx.globalAlpha = 0.3;
+                drawingContext.shadowBlur = 20;
+                drawingContext.shadowColor = this.color;
+
+                fill(255);
+                stroke(0);
+                strokeWeight(4); // Thick black border
+                circle(0, 0, this.radius * 2);
+
+                fill(this.color);
+                circle(0, 0, this.radius * 1.4);
+
+                // Tank Shield Visuals
+                if (this.lives > 1) {
+                    noFill();
+                    strokeWeight(3);
+
+                    for (let i = 0; i < this.lives - 1; i++) {
+                        stroke(255, 255, 255, 150);
+                        let radius = this.radius * 2 + (i * 8);
+                        let speed = (i % 2 === 0 ? 1 : -1) * (millis() / 1000);
+
+                        push();
+                        rotate(speed);
+                        // Draw segmented ring
+                        let segments = 3;
+                        let angleStep = TWO_PI / segments;
+                        for (let j = 0; j < segments; j++) {
+                            arc(0, 0, radius, radius, j * angleStep, j * angleStep + angleStep * 0.6);
+                        }
+                        pop();
+                    }
+
+                    // Text for lives (keep it but maybe smaller/different ?)
+                    fill(255);
+                    noStroke();
+                    textAlign(CENTER, CENTER);
+                    textSize(12);
+                    textStyle(BOLD);
+                    text('BOUCLIER', 0, 0);
                 }
 
-                // Glow
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = this.color;
+                drawingContext.shadowBlur = 0;
+                drawingContext.globalAlpha = 1;
 
-                // Core
-                ctx.fillStyle = '#fff';
-                ctx.beginPath();
-                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Inner Color
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(0, 0, this.radius * 0.7, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Tank lives indicator
-                if (this.role === 'tank' && this.lives > 1) {
-                    ctx.fillStyle = '#fff';
-                    ctx.font = 'bold 12px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText('x' + this.lives, 0, 0);
-                }
-
-                ctx.globalAlpha = 1;
-                ctx.shadowBlur = 0;
-
-                // Emoji above (if has role)
+                // Role emoji at the top center (above everything)
                 if (this.emoji) {
-                    ctx.font = '20px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'bottom';
-                    ctx.fillText(this.emoji, 0, -this.radius - 22);
+                    textAlign(CENTER, CENTER);
+                    textSize(24);
+                    text(this.emoji, 0, -this.radius - 35);
                 }
 
-                // Name
-                ctx.fillStyle = "#fff";
-                ctx.font = "bold 14px 'Audiowide', sans-serif";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillText(this.name, 0, -this.radius - 8);
+                // Player name
+                fill(255);
+                textAlign(CENTER, CENTER);
+                textSize(14);
+                textFont('Audiowide');
+                text(this.name, 0, -this.radius - 12);
 
-                ctx.restore();
+                // Role passive indicators (drawn around the sides)
+                this.drawRolePassives();
+
+                pop();
+            }
+
+            drawRolePassives() {
+                if (!this.role) return;
+
+                const passives = [];
+
+                // Collect active passives based on role
+                if (this.role === 'assassin') {
+                    const percentage = Math.round(this.assassinWinChance * 100);
+                    passives.push({
+                        icon: '🗡️',
+                        color: '#FF0055',
+                        text: '',
+                        tooltip: `Chances de victoire : ${percentage}%`,
+                        progress: this.assassinWinChance // Add progress value for visual arc
+                    });
+                }
+
+                if (this.role === 'vampire') {
+                    passives.push({
+                        icon: '🦇',
+                        color: '#8B00FF',
+                        text: '',
+                        tooltip: 'Aura de Drain de Vie'
+                    });
+                }
+
+                if (this.role === 'ghost' && this.ghostInvincible) {
+                    passives.push({
+                        icon: '👻',
+                        color: '#FFFFFF',
+                        text: '',
+                        tooltip: 'Invincible'
+                    });
+                }
+
+                if (this.role === 'ninja') {
+                    const cooldownSec = Math.round(this.ninjaSwapCooldown / 60);
+                    passives.push({
+                        icon: '🥷',
+                        color: '#0066FF',
+                        text: cooldownSec > 0 ? `${cooldownSec}s` : '✓',
+                        tooltip: cooldownSec > 0 ? `Échange dans ${cooldownSec}s` : 'Échange Prêt'
+                    });
+                }
+
+                if (this.role === 'webmaster') {
+                    passives.push({
+                        icon: '🕸️',
+                        color: '#E0E0E0',
+                        text: '',
+                        tooltip: 'Laisse des traînées de toile'
+                    });
+                }
+
+                if (this.role === 'glitch') {
+                    const cooldownSec = Math.round(this.glitchTeleportCooldown / 60);
+                    passives.push({
+                        icon: '👾',
+                        color: '#00F3FF',
+                        text: cooldownSec > 0 ? `${cooldownSec}s` : '✓',
+                        tooltip: cooldownSec > 0 ? `Téléportation dans ${cooldownSec}s` : 'Téléportation Prête'
+                    });
+                }
+
+                if (this.role === 'martyr') {
+                    passives.push({
+                        icon: '💣',
+                        color: '#FF6600',
+                        text: '',
+                        tooltip: 'Explose à la mort'
+                    });
+                }
+
+                if (this.webSlowTimer > 0) {
+                    const sourceColor = this.webSlowSource ? this.webSlowSource.color : '#E0E0E0';
+                    passives.push({
+                        icon: '🕸️',
+                        color: sourceColor,
+                        text: '!',
+                        tooltip: 'Ralenti par la toile'
+                    });
+                }
+
+                // Draw passive indicators around the player (avoiding the top where emoji is)
+                const angleStep = TWO_PI / passives.length;
+                const startAngle = passives.length === 1 ? HALF_PI : 0; // If only 1 passive, put it at bottom
+                passives.forEach((passive, index) => {
+                    const angle = startAngle + (index * angleStep);
+                    const distance = this.radius + 28;
+                    const px = cos(angle) * distance;
+                    const py = sin(angle) * distance;
+
+                    push();
+                    translate(px, py);
+
+                    // Passive indicator background
+                    fill(0, 0, 0, 200);
+                    stroke(passive.color);
+                    strokeWeight(2);
+                    circle(0, 0, 24);
+
+                    // Draw progress arc if available (for assassin)
+                    if (passive.progress !== undefined) {
+                        noFill();
+                        stroke(passive.color);
+                        strokeWeight(3);
+                        strokeCap(ROUND);
+                        const arcAngle = passive.progress * TWO_PI;
+                        // Draw arc from top, going clockwise
+                        arc(0, 0, 28, 28, -HALF_PI, -HALF_PI + arcAngle);
+
+                        // Draw dimmed full circle to show total
+                        stroke(passive.color + '40'); // Add transparency
+                        strokeWeight(1);
+                        noFill();
+                        circle(0, 0, 28);
+                    }
+
+                    // Icon
+                    noStroke();
+                    textAlign(CENTER, CENTER);
+                    textSize(14);
+                    text(passive.icon, 0, 0);
+
+                    // Text overlay (e.g., for other abilities)
+                    if (passive.text) {
+                        fill(255);
+                        textSize(8);
+                        textFont('Courier New');
+                        textStyle(BOLD);
+                        text(passive.text, 0, 12);
+                    }
+
+                    pop();
+                });
             }
         }
 
         class Particle {
             constructor(x, y, color) {
-                this.x = x;
-                this.y = y;
+                this.pos = createVector(x, y);
+                this.vel = p5.Vector.random2D().mult(random(2, 8));
                 this.color = color;
-                const angle = Math.random() * Math.PI * 2;
-                const speed = rand(2, 8);
-                this.vx = Math.cos(angle) * speed;
-                this.vy = Math.sin(angle) * speed;
                 this.life = 1.0;
-                this.size = rand(2, 6);
+                this.size = random(2, 6);
             }
-
             update() {
-                this.x += this.vx;
-                this.y += this.vy;
+                this.pos.add(this.vel);
                 this.life -= 0.03;
                 this.size *= 0.95;
             }
-
-            draw(ctx) {
-                ctx.globalAlpha = this.life;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
+            draw() {
+                noStroke();
+                let c = color(this.color);
+                c.setAlpha(this.life * 255);
+                fill(c);
+                circle(this.pos.x, this.pos.y, this.size * 2);
             }
         }
 
-        // Init
-        new Game();
+        function setLineDash(list) {
+            drawingContext.setLineDash(list);
+        }
     </script>
 </body>
 
