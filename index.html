@@ -314,18 +314,16 @@ SHADE</textarea>
 
     <script>
         const CONFIG = {
-            colors: [
-                '#FF0055', // Neon Red
-                '#00F3FF', // Cyan
-                '#39FF14', // Neon Green
-                '#FFFF00', // Yellow
-                '#BE00FF', // Purple
-                '#FF6600', // Orange
-            ],
             minSpeed: 3,
             maxSpeed: 7,
-            drag: 1.0,  // No friction
-            radius: 20
+            drag: 1.0,
+            radius: 20,
+            colors: ['#FF0055', '#00F3FF', '#39FF14', '#FFFF00', '#BE00FF', '#FF6600'],
+            crews: {
+                cyan: '#00F3FF',
+                magenta: '#FF1493' // Hot Pink
+            },
+            traitorGold: '#FFD700'
         };
 
         const $ = id => document.getElementById(id);
@@ -354,6 +352,9 @@ SHADE</textarea>
                 this.slowMotionDelay = 0; // Frames to wait before turning off
                 this.slowMotionDelayFrames = 30; // ~0.5 seconds at 60fps
                 this.playerDistances = new Map(); // Track previous distances
+
+                this.gameState = 'TEAMS'; // 'TEAMS', 'TRANSITION', 'FFA'
+                this.dangerZone = null; // {x, y, w, h}
 
                 window.addEventListener('resize', () => this.resize());
                 this.resize();
@@ -399,26 +400,32 @@ SHADE</textarea>
                 if (playerEntries.length < 2) return alert("NEED MORE PLAYERS");
 
                 this.players = [];
-                let nextId = 1;
-                for (let entry of playerEntries) {
+                this.gameState = 'TEAMS';
+                this.dangerZone = null;
+
+                // Shuffle names to randomize teams
+                const shuffledEntries = this.shuffleArray([...playerEntries]);
+                const mid = Math.ceil(shuffledEntries.length / 2);
+
+                shuffledEntries.forEach((entry, index) => {
+                    const team = index < mid ? 'cyan' : 'magenta';
                     let id, name;
                     const parts = entry.split(',').map(p => p.trim());
                     if (parts.length === 2) {
                         id = parts[0];
                         name = parts[1];
                     } else {
-                        id = `P${nextId++}`;
+                        id = `P${index + 1}`;
                         name = parts[0];
                     }
 
                     const pos = this.getSafeSpawnPosition(this.players);
                     if (pos) {
-                        this.players.push(new Player(id, name, pos.x, pos.y));
+                        this.players.push(new Player(id, name, pos.x, pos.y, team));
                     } else {
-                        console.warn(`Could not find safe spawn for ${name} (ID: ${id})`);
-                        this.players.push(new Player(id, name, rand(100, this.width - 100), rand(100, this.height - 100)));
+                        this.players.push(new Player(id, name, rand(100, this.width - 100), rand(100, this.height - 100), team));
                     }
-                }
+                });
 
                 $('setup-panel').classList.add('hidden');
                 $('hud-top').classList.add('visible');
@@ -501,6 +508,8 @@ SHADE</textarea>
                     this.players.forEach(p => p.update(this, speedMultiplier));
                     this.checkCollisions();
 
+                    if (this.gameState === 'FFA') this.drawDangerZone();
+
                     // Render Players
                     this.players.forEach(p => p.draw(this.gCtx));
                 }
@@ -521,21 +530,24 @@ SHADE</textarea>
             updateSlowMotion() {
                 const active = this.players.filter(p => !p.dead);
 
-                // Only when under 10 players and combat has started
-                if (active.length >= 10 || this.gracePeriod > 0) {
+                // Only when under 10 players and combat has started, and NOT in transition
+                if (active.length >= 10 || this.gracePeriod > 0 || this.gameState === 'TRANSITION') {
                     this.slowMotion = false;
                     this.playerDistances.clear();
                     return;
                 }
 
                 let shouldSlowDown = false;
-                const dangerThreshold = 150; // Distance threshold for slow-motion
+                const dangerThreshold = this.gameState === 'TEAMS' ? 60 : 100; // Increased distance threshold for FFA
 
                 // Check all pairs of players
                 for (let i = 0; i < active.length; i++) {
                     for (let j = i + 1; j < active.length; j++) {
                         const p1 = active[i];
                         const p2 = active[j];
+
+                        // Skip slow-motion for teammates
+                        if (this.gameState === 'TEAMS' && p1.team === p2.team) continue;
 
                         const dx = p1.x - p2.x;
                         const dy = p1.y - p2.y;
@@ -586,9 +598,19 @@ SHADE</textarea>
                                 // Elastic Collision (Peace Phase)
                                 this.resolveElastic(p1, p2, dx, dy, dist);
                             } else {
-                                // Combat Phase
-                                if (p1.cooldown <= 0 && p2.cooldown <= 0) {
-                                    this.resolveCombat(p1, p2);
+                                // Combat Phase - Depends on Game State
+                                if (this.gameState === 'TEAMS') {
+                                    if (p1.team === p2.team) {
+                                        this.resolveElastic(p1, p2, dx, dy, dist);
+                                    } else {
+                                        if (p1.cooldown <= 0 && p2.cooldown <= 0) {
+                                            this.resolveCombat(p1, p2);
+                                        }
+                                    }
+                                } else if (this.gameState === 'FFA') {
+                                    if (p1.cooldown <= 0 && p2.cooldown <= 0) {
+                                        this.resolveCombat(p1, p2);
+                                    }
                                 }
                             }
                         }
@@ -659,10 +681,16 @@ SHADE</textarea>
                 this.logKill(winner, loser);
                 this.updateCount();
 
-                // Check Win
-                const alive = this.players.filter(p => !p.dead);
-                if (alive.length === 1) {
-                    this.endGame(alive[0]);
+                // Check Win conditions
+                const active = this.players.filter(p => !p.dead);
+
+                if (this.gameState === 'TEAMS') {
+                    const teamsRemaining = new Set(active.map(p => p.team));
+                    if (teamsRemaining.size === 1) {
+                        this.transitionToPhase2();
+                    }
+                } else if (this.gameState === 'FFA' && active.length === 1) {
+                    this.endGame(active[0]);
                 }
             }
 
@@ -685,6 +713,89 @@ SHADE</textarea>
                         }, i * 200);
                     }
                 }, 1000);
+            }
+
+            transitionToPhase2() {
+                this.gameState = 'TRANSITION';
+                const el = $('phase-indicator');
+                el.innerText = "VICTORY... BUT THERE CAN BE ONLY ONE.";
+                el.style.color = CONFIG.traitorGold;
+                el.style.display = 'block';
+                el.style.fontSize = '3rem';
+                el.style.width = '80%';
+                el.style.textAlign = 'center';
+
+                // Calculate Danger Zone
+                const zoneW = this.width * 0.5;
+                const zoneH = this.height * 0.5;
+                this.dangerZone = {
+                    x: (this.width - zoneW) / 2,
+                    y: (this.height - zoneH) / 2,
+                    w: zoneW,
+                    h: zoneH
+                };
+
+                setTimeout(() => {
+                    const active = this.players.filter(p => !p.dead);
+                    active.forEach(p => {
+                        // Teleport to center area
+                        p.x = this.width / 2 + rand(-50, 50);
+                        p.y = this.height / 2 + rand(-50, 50);
+                        p.color = CONFIG.traitorGold;
+                        p.team = null; // Everyone is an enemy now
+
+                        // Give some initial velocity
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = rand(CONFIG.minSpeed, CONFIG.maxSpeed);
+                        p.vx = Math.cos(angle) * speed;
+                        p.vy = Math.sin(angle) * speed;
+                    });
+
+                    this.gameState = 'FFA';
+                    el.innerText = "BETRAYAL";
+                    setTimeout(() => el.style.display = 'none', 2000);
+                }, 3000);
+            }
+
+            drawDangerZone() {
+                if (!this.dangerZone) return;
+                const ctx = this.gCtx;
+                const z = this.dangerZone;
+
+                ctx.save();
+
+                // Outer Glow for Danger Zone
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = CONFIG.traitorGold;
+
+                // Draw multiple layers for "hand-drawn/rough" effect
+                for (let layer = 0; layer < 3; layer++) {
+                    ctx.strokeStyle = layer === 0 ? "rgba(255,255,255,0.8)" : CONFIG.traitorGold;
+                    ctx.lineWidth = layer === 0 ? 6 : 2;
+                    ctx.beginPath();
+
+                    const jitter = 4 - layer;
+                    const steps = 30;
+
+                    // Helper for rough lines
+                    const roughLine = (x1, y1, x2, y2) => {
+                        ctx.moveTo(x1 + rand(-jitter, jitter), y1 + rand(-jitter, jitter));
+                        for (let i = 1; i <= steps; i++) {
+                            const tx = x1 + (x2 - x1) * (i / steps) + rand(-jitter, jitter);
+                            const ty = y1 + (y2 - y1) * (i / steps) + rand(-jitter, jitter);
+                            ctx.lineTo(tx, ty);
+                        }
+                    };
+
+                    roughLine(z.x, z.y, z.x + z.w, z.y); // Top
+                    roughLine(z.x + z.w, z.y, z.x + z.w, z.y + z.h); // Right
+                    roughLine(z.x + z.w, z.y + z.h, z.x, z.y + z.h); // Bottom
+                    roughLine(z.x, z.y + z.h, z.x, z.y); // Left
+
+                    ctx.stroke();
+                }
+
+                ctx.restore();
             }
 
             drawSplat(x, y, color, size, count) {
@@ -812,14 +923,23 @@ SHADE</textarea>
                 result.push(current); // Add last field
                 return result;
             }
+
+            shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
         }
 
         class Player {
-            constructor(id, name, x, y) {
-                this.id = id; // Unique identifier for the player
+            constructor(id, name, x, y, team = null) {
+                this.id = id;
                 this.name = name;
                 this.radius = CONFIG.radius;
-                this.color = randColor();
+                this.team = team;
+                this.color = team ? CONFIG.crews[team] : randColor();
                 this.x = x;
                 this.y = y;
 
@@ -840,10 +960,14 @@ SHADE</textarea>
                 this.y += this.vy * speedMultiplier;
 
                 // Wall Bounce
-                if (this.x < 0 + this.radius) { this.x = this.radius; this.vx *= -1; }
-                if (this.x > game.width - this.radius) { this.x = game.width - this.radius; this.vx *= -1; }
-                if (this.y < 0 + this.radius) { this.y = this.radius; this.vy *= -1; }
-                if (this.y > game.height - this.radius) { this.y = game.height - this.radius; this.vy *= -1; }
+                const bounds = (game.gameState === 'FFA' && game.dangerZone) ?
+                    { xmin: game.dangerZone.x, xmax: game.dangerZone.x + game.dangerZone.w, ymin: game.dangerZone.y, ymax: game.dangerZone.y + game.dangerZone.h } :
+                    { xmin: 0, xmax: game.width, ymin: 0, ymax: game.height };
+
+                if (this.x < bounds.xmin + this.radius) { this.x = bounds.xmin + this.radius; this.vx *= -1; }
+                if (this.x > bounds.xmax - this.radius) { this.x = bounds.xmax - this.radius; this.vx *= -1; }
+                if (this.y < bounds.ymin + this.radius) { this.y = bounds.ymin + this.radius; this.vy *= -1; }
+                if (this.y > bounds.ymax - this.radius) { this.y = bounds.ymax - this.radius; this.vy *= -1; }
 
                 // Paint Trail (Frequency check to save perf if needed, but per-frame is smoother)
                 if (Math.random() > 0.1) {
