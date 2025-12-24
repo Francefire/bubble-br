@@ -326,6 +326,30 @@ SHADE</textarea>
             traitorGold: '#FFD700'
         };
 
+        // Phase 2: Top 8 Champions Roles Configuration
+        const ROLES = {
+            ninja: { color: '#0066FF', emoji: '🥷', name: 'Ninja' },
+            trailblazer: { color: '#39FF14', emoji: '☣️', name: 'Trailblazer' },
+            tank: { color: '#888888', emoji: '🛡️', name: 'Tank' },
+            assassin: { color: '#FF0055', emoji: '🗡️', name: 'Assassin' },
+            vampire: { color: '#8B00FF', emoji: '🦇', name: 'Vampire' },
+            martyr: { color: '#FF6600', emoji: '💣', name: 'Martyr' },
+            glitch: { color: '#00F3FF', emoji: '👾', name: 'Glitch' },
+            ghost: { color: '#FFFFFF', emoji: '👻', name: 'Ghost' }
+        };
+
+        const APEX_CONFIG = {
+            ninjaSwapCooldown: 180,      // 3 seconds at 60fps
+            ninjaSwapRange: 60,          // pixels
+            glitchTeleportInterval: 240, // 4 seconds at 60fps
+            ghostInvincibleTime: 120,    // 2 seconds at 60fps
+            trailLifetime: 300,          // 5 seconds at 60fps
+            vampireAuraRadius: 100,      // pixels
+            vampireDeathChance: 0.005,   // 0.5% per frame
+            stalemateTime: 10000,        // 10 seconds in ms
+            shrinkRate: 25               // pixels per second
+        };
+
         const $ = id => document.getElementById(id);
         const rand = (min, max) => Math.random() * (max - min) + min;
         const randInt = (min, max) => Math.floor(rand(min, max));
@@ -353,8 +377,15 @@ SHADE</textarea>
                 this.slowMotionDelayFrames = 30; // ~0.5 seconds at 60fps
                 this.playerDistances = new Map(); // Track previous distances
 
-                this.gameState = 'TEAMS'; // 'TEAMS', 'TRANSITION', 'FFA'
-                this.dangerZone = null; // {x, y, w, h}
+                this.gameState = 'TEAMS'; // 'TEAMS', 'TRANSITION', 'APEX'
+
+                // Phase 2: Circular Arena State
+                this.arenaCenter = { x: 0, y: 0 };
+                this.arenaRadius = 0;
+                this.arenaBaseRadius = 0;
+                this.lastEliminationTime = 0;
+                this.trailblazerTrails = []; // [{x, y, playerId, timestamp}, ...]
+                this.deathOrderCounter = 0; // Track order of eliminations for resurrection
 
                 window.addEventListener('resize', () => this.resize());
                 this.resize();
@@ -401,7 +432,7 @@ SHADE</textarea>
 
                 this.players = [];
                 this.gameState = 'TEAMS';
-                this.dangerZone = null;
+                this.trailblazerTrails = [];
 
                 // Shuffle names to randomize teams
                 const shuffledEntries = this.shuffleArray([...playerEntries]);
@@ -508,7 +539,13 @@ SHADE</textarea>
                     this.players.forEach(p => p.update(this, speedMultiplier));
                     this.checkCollisions();
 
-                    if (this.gameState === 'FFA') this.drawDangerZone();
+                    // APEX: Update arena shrinking and draw circular boundary
+                    if (this.gameState === 'APEX') {
+                        this.updateArenaShrinking();
+                        this.updateApexMechanics();
+                        this.drawCircularArena();
+                        this.drawTrailblazerTrails();
+                    }
 
                     // Render Players
                     this.players.forEach(p => p.draw(this.gCtx));
@@ -538,7 +575,7 @@ SHADE</textarea>
                 }
 
                 let shouldSlowDown = false;
-                const dangerThreshold = this.gameState === 'TEAMS' ? 60 : 100; // Increased distance threshold for FFA
+                const dangerThreshold = this.gameState === 'TEAMS' ? 60 : 100; // Increased distance threshold for APEX
 
                 // Check all pairs of players
                 for (let i = 0; i < active.length; i++) {
@@ -607,9 +644,9 @@ SHADE</textarea>
                                             this.resolveCombat(p1, p2);
                                         }
                                     }
-                                } else if (this.gameState === 'FFA') {
+                                } else if (this.gameState === 'APEX') {
                                     if (p1.cooldown <= 0 && p2.cooldown <= 0) {
-                                        this.resolveCombat(p1, p2);
+                                        this.resolveApexCombat(p1, p2);
                                     }
                                 }
                             }
@@ -664,6 +701,7 @@ SHADE</textarea>
 
                 // Eliminate Loser
                 loser.dead = true;
+                loser.deathOrder = ++this.deathOrderCounter; // Track when they died
 
                 // HUGE SPLAT
                 this.drawSplat(loser.x, loser.y, loser.color, 80, 50); // Big messy splat
@@ -689,7 +727,7 @@ SHADE</textarea>
                     if (teamsRemaining.size === 1) {
                         this.transitionToPhase2();
                     }
-                } else if (this.gameState === 'FFA' && active.length === 1) {
+                } else if (this.gameState === 'APEX' && active.length === 1) {
                     this.endGame(active[0]);
                 }
             }
@@ -718,83 +756,384 @@ SHADE</textarea>
             transitionToPhase2() {
                 this.gameState = 'TRANSITION';
                 const el = $('phase-indicator');
-                el.innerText = "VICTORY... BUT THERE CAN BE ONLY ONE.";
-                el.style.color = CONFIG.traitorGold;
+                el.innerText = "PHASE 2";
+                el.style.color = '#FFFFFF';
                 el.style.display = 'block';
-                el.style.fontSize = '3rem';
-                el.style.width = '80%';
+                el.style.fontSize = '5rem';
+                el.style.width = '100%';
                 el.style.textAlign = 'center';
 
-                // Calculate Danger Zone
-                const zoneW = this.width * 0.5;
-                const zoneH = this.height * 0.5;
-                this.dangerZone = {
-                    x: (this.width - zoneW) / 2,
-                    y: (this.height - zoneH) / 2,
-                    w: zoneW,
-                    h: zoneH
-                };
-
+                // Wait 3 seconds, then cull and setup arena
                 setTimeout(() => {
-                    const active = this.players.filter(p => !p.dead);
-                    active.forEach(p => {
-                        // Teleport to center area
-                        p.x = this.width / 2 + rand(-50, 50);
-                        p.y = this.height / 2 + rand(-50, 50);
-                        p.color = CONFIG.traitorGold;
-                        p.team = null; // Everyone is an enemy now
+                    // Get the winning team
+                    const survivors = this.players.filter(p => !p.dead);
+                    const winningTeam = survivors[0].team;
 
-                        // Give some initial velocity
-                        const angle = Math.random() * Math.PI * 2;
-                        const speed = rand(CONFIG.minSpeed, CONFIG.maxSpeed);
-                        p.vx = Math.cos(angle) * speed;
-                        p.vy = Math.sin(angle) * speed;
+                    // Get ALL players from the winning team (alive and dead)
+                    const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
+
+                    // Sort: alive players first (deathOrder=0), then most recently dead (higher deathOrder = died later)
+                    winningTeamPlayers.sort((a, b) => {
+                        // Alive players come first
+                        if (a.deathOrder === 0 && b.deathOrder !== 0) return -1;
+                        if (a.deathOrder !== 0 && b.deathOrder === 0) return 1;
+                        // Among alive, sort by radius (largest first)
+                        if (a.deathOrder === 0 && b.deathOrder === 0) return b.radius - a.radius;
+                        // Among dead, sort by deathOrder descending (most recently dead first)
+                        return b.deathOrder - a.deathOrder;
                     });
 
-                    this.gameState = 'FFA';
-                    el.innerText = "BETRAYAL";
-                    setTimeout(() => el.style.display = 'none', 2000);
+                    // Take top 8 (or all if fewer than 8)
+                    const top8 = winningTeamPlayers.slice(0, 8);
+                    const eliminated = winningTeamPlayers.slice(8);
+
+                    // Resurrect dead players in top 8
+                    top8.forEach(p => {
+                        if (p.dead) {
+                            p.dead = false;
+                            p.deathOrder = 0;
+                            p.radius = CONFIG.radius; // Reset to base size
+                            // Spawn particles to show resurrection
+                            this.spawnParticles(p.x, p.y, '#FFFFFF', 20);
+                        }
+                    });
+
+                    // Kill players not in top 8 (from winning team) with splats
+                    eliminated.forEach(p => {
+                        if (!p.dead) {
+                            p.dead = true;
+                            this.drawSplat(p.x, p.y, p.color, 60, 30);
+                        }
+                    });
+
+                    // Also mark all non-winning team players as dead (they should already be)
+                    this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
+
+                    // Assign roles to top 8
+                    const roleKeys = Object.keys(ROLES);
+                    const shuffledRoles = this.shuffleArray([...roleKeys]);
+
+                    top8.forEach((player, index) => {
+                        const roleKey = shuffledRoles[index];
+                        const role = ROLES[roleKey];
+
+                        player.role = roleKey;
+                        player.emoji = role.emoji;
+                        player.color = role.color;
+                        player.team = null; // Everyone is an enemy
+
+                        // Role-specific initialization
+                        if (roleKey === 'tank') {
+                            player.lives = 3;
+                        }
+                        player.ninjaSwapCooldown = 0;
+                        player.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
+                        player.ghostInvincible = false;
+                        player.ghostInvincibleTime = 0;
+                        player.trailPoints = []; // For trailblazer
+
+                        // Teleport to center
+                        player.x = this.width / 2 + rand(-30, 30);
+                        player.y = this.height / 2 + rand(-30, 30);
+
+                        // Give random velocity
+                        const angle = Math.random() * Math.PI * 2;
+                        const speed = rand(CONFIG.minSpeed, CONFIG.maxSpeed);
+                        player.vx = Math.cos(angle) * speed;
+                        player.vy = Math.sin(angle) * speed;
+                    });
+
+                    // Setup circular arena
+                    this.arenaCenter = { x: this.width / 2, y: this.height / 2 };
+                    this.arenaBaseRadius = this.height * 0.50;
+                    this.arenaRadius = this.arenaBaseRadius;
+                    this.lastEliminationTime = Date.now();
+
+                    this.updateCount();
+
+                    el.innerText = "THE APEX ARENA";
+                    el.style.color = '#FFD700';
+                    setTimeout(() => {
+                        el.style.display = 'none';
+                        this.gameState = 'APEX';
+                    }, 2000);
                 }, 3000);
             }
 
-            drawDangerZone() {
-                if (!this.dangerZone) return;
+            updateArenaShrinking() {
+                const now = Date.now();
+                if (now - this.lastEliminationTime > APEX_CONFIG.stalemateTime) {
+                    // Shrink the arena
+                    const shrinkPerFrame = APEX_CONFIG.shrinkRate * (16 / 1000); // ~16ms per frame
+                    this.arenaRadius = Math.max(80, this.arenaRadius - shrinkPerFrame);
+                }
+            }
+
+            updateApexMechanics() {
+                const active = this.players.filter(p => !p.dead && p.role);
+                const now = Date.now();
+
+                active.forEach(player => {
+                    // Glitch teleportation
+                    if (player.role === 'glitch') {
+                        player.glitchTeleportCooldown--;
+                        if (player.glitchTeleportCooldown <= 0) {
+                            // Teleport to random position inside circle
+                            const angle = Math.random() * Math.PI * 2;
+                            const dist = Math.random() * (this.arenaRadius - player.radius - 20);
+                            player.x = this.arenaCenter.x + Math.cos(angle) * dist;
+                            player.y = this.arenaCenter.y + Math.sin(angle) * dist;
+                            player.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
+                            this.spawnParticles(player.x, player.y, player.color, 15);
+                        }
+                    }
+
+                    // Ninja swap detection
+                    if (player.role === 'ninja' && player.ninjaSwapCooldown <= 0) {
+                        for (const other of active) {
+                            if (other === player || other.ghostInvincible) continue;
+                            const dist = Math.hypot(player.x - other.x, player.y - other.y);
+                            if (dist < APEX_CONFIG.ninjaSwapRange) {
+                                // Swap positions
+                                const tempX = player.x, tempY = player.y;
+                                player.x = other.x;
+                                player.y = other.y;
+                                other.x = tempX;
+                                other.y = tempY;
+                                player.ninjaSwapCooldown = APEX_CONFIG.ninjaSwapCooldown;
+                                this.spawnParticles(player.x, player.y, player.color, 10);
+                                this.spawnParticles(other.x, other.y, player.color, 10);
+                                break;
+                            }
+                        }
+                    }
+                    if (player.ninjaSwapCooldown > 0) player.ninjaSwapCooldown--;
+
+                    // Vampire aura
+                    if (player.role === 'vampire') {
+                        for (const other of active) {
+                            if (other === player || other.ghostInvincible) continue;
+                            const dist = Math.hypot(player.x - other.x, player.y - other.y);
+                            if (dist < APEX_CONFIG.vampireAuraRadius) {
+                                if (Math.random() < APEX_CONFIG.vampireDeathChance) {
+                                    // Heart attack!
+                                    this.killPlayer(other, player, 'HEART ATTACK');
+                                }
+                            }
+                        }
+                    }
+
+                    // Trailblazer trail
+                    if (player.role === 'trailblazer') {
+                        // Add current position to trail
+                        this.trailblazerTrails.push({
+                            x: player.x,
+                            y: player.y,
+                            playerId: player.id,
+                            timestamp: now,
+                            color: player.color
+                        });
+
+                        // Check if enemies touch trail
+                        for (const other of active) {
+                            if (other === player || other.ghostInvincible) continue;
+                            for (const point of this.trailblazerTrails) {
+                                if (point.playerId === player.id) {
+                                    const dist = Math.hypot(other.x - point.x, other.y - point.y);
+                                    if (dist < other.radius + 5) {
+                                        this.killPlayer(other, player, 'TOXIC TRAIL');
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Ghost invincibility countdown
+                    if (player.ghostInvincible) {
+                        player.ghostInvincibleTime--;
+                        if (player.ghostInvincibleTime <= 0) {
+                            player.ghostInvincible = false;
+                        }
+                    }
+                });
+
+                // Clean up old trail points
+                this.trailblazerTrails = this.trailblazerTrails.filter(
+                    point => now - point.timestamp < APEX_CONFIG.trailLifetime * (1000 / 60)
+                );
+            }
+
+            killPlayer(victim, killer, deathMessage = 'SPLATTED') {
+                if (victim.dead || victim.ghostInvincible) return;
+
+                // Ghost survival chance
+                if (victim.role === 'ghost' && Math.random() < 0.5) {
+                    victim.ghostInvincible = true;
+                    victim.ghostInvincibleTime = APEX_CONFIG.ghostInvincibleTime;
+                    this.spawnParticles(victim.x, victim.y, '#FFFFFF', 20);
+                    return; // Survived!
+                }
+
+                // Tank multi-life
+                if (victim.role === 'tank' && victim.lives > 1) {
+                    victim.lives--;
+                    victim.radius = Math.max(15, victim.radius - 5);
+                    this.spawnParticles(victim.x, victim.y, victim.color, 15);
+                    return; // Survived!
+                }
+
+                // Actually die
+                victim.dead = true;
+                this.drawSplat(victim.x, victim.y, victim.color, 80, 50);
+                this.spawnParticles(victim.x, victim.y, victim.color, 30);
+
+                // Log kill with custom message
+                const div = document.createElement('div');
+                div.className = 'kill-msg';
+                div.style.borderColor = killer.color;
+                div.innerHTML = `<span style="color:${killer.color}">${killer.emoji} ${killer.name}</span> ${deathMessage} <span style="color:#888">${victim.emoji} ${victim.name}</span>`;
+                $('kill-feed').prepend(div);
+                setTimeout(() => div.remove(), 4000);
+
+                // Martyr revenge
+                if (victim.role === 'martyr' && killer && killer !== victim) {
+                    setTimeout(() => {
+                        if (!killer.dead) {
+                            killer.dead = true;
+                            this.drawSplat(killer.x, killer.y, '#FF6600', 100, 60);
+                            this.spawnParticles(killer.x, killer.y, '#FF6600', 40);
+
+                            const vengDiv = document.createElement('div');
+                            vengDiv.className = 'kill-msg';
+                            vengDiv.style.borderColor = '#FF6600';
+                            vengDiv.innerHTML = `<span style="color:#FF6600">💣 ${victim.name}</span> MARTYRDOM <span style="color:#888">${killer.emoji} ${killer.name}</span>`;
+                            $('kill-feed').prepend(vengDiv);
+                            setTimeout(() => vengDiv.remove(), 4000);
+                            this.updateCount();
+                        }
+                    }, 100);
+                }
+
+                // Buff killer
+                if (killer && killer !== victim) {
+                    killer.radius += 3;
+                    killer.cooldown = 20;
+                }
+
+                this.lastEliminationTime = Date.now();
+                this.updateCount();
+
+                // Check win condition
+                const active = this.players.filter(p => !p.dead);
+                if (active.length === 1) {
+                    this.endGame(active[0]);
+                }
+            }
+
+            resolveApexCombat(p1, p2) {
+                // Skip if either is invincible (ghost)
+                if (p1.ghostInvincible || p2.ghostInvincible) {
+                    // Just elastic bounce
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const dist = Math.hypot(dx, dy);
+                    this.resolveElastic(p1, p2, dx, dy, dist);
+                    return;
+                }
+
+                // Calculate win probability
+                let p1WinChance = 0.5;
+                let p2WinChance = 0.5;
+
+                if (p1.role === 'assassin') p1WinChance = 0.8;
+                if (p2.role === 'assassin') p2WinChance = 0.8;
+
+                // Normalize
+                const total = p1WinChance + p2WinChance;
+                p1WinChance /= total;
+
+                const winner = Math.random() < p1WinChance ? p1 : p2;
+                const loser = winner === p1 ? p2 : p1;
+
+                this.killPlayer(loser, winner);
+
+                // Bounce winner away
+                const angle = Math.atan2(winner.y - loser.y, winner.x - loser.x);
+                winner.vx = Math.cos(angle) * 8;
+                winner.vy = Math.sin(angle) * 8;
+            }
+
+            drawCircularArena() {
                 const ctx = this.gCtx;
-                const z = this.dangerZone;
+                const cx = this.arenaCenter.x;
+                const cy = this.arenaCenter.y;
+                const r = this.arenaRadius;
 
                 ctx.save();
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#FFFFFF';
 
-                // Outer Glow for Danger Zone
-                ctx.shadowBlur = 20;
-                ctx.shadowColor = CONFIG.traitorGold;
-
-                // Draw multiple layers for "hand-drawn/rough" effect
-                for (let layer = 0; layer < 3; layer++) {
-                    ctx.strokeStyle = layer === 0 ? "rgba(255,255,255,0.8)" : CONFIG.traitorGold;
-                    ctx.lineWidth = layer === 0 ? 6 : 2;
+                // Draw jagged chalk circle - multiple layers
+                for (let layer = 0; layer < 2; layer++) {
+                    ctx.strokeStyle = layer === 0 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+                    ctx.lineWidth = layer === 0 ? 4 : 8;
                     ctx.beginPath();
 
-                    const jitter = 4 - layer;
-                    const steps = 30;
+                    const segments = 60;
+                    const jitter = layer === 0 ? 4 : 8;
 
-                    // Helper for rough lines
-                    const roughLine = (x1, y1, x2, y2) => {
-                        ctx.moveTo(x1 + rand(-jitter, jitter), y1 + rand(-jitter, jitter));
-                        for (let i = 1; i <= steps; i++) {
-                            const tx = x1 + (x2 - x1) * (i / steps) + rand(-jitter, jitter);
-                            const ty = y1 + (y2 - y1) * (i / steps) + rand(-jitter, jitter);
-                            ctx.lineTo(tx, ty);
+                    for (let i = 0; i <= segments; i++) {
+                        const angle = (i / segments) * Math.PI * 2;
+                        const jitterR = r + rand(-jitter, jitter);
+                        const px = cx + Math.cos(angle) * jitterR;
+                        const py = cy + Math.sin(angle) * jitterR;
+
+                        if (i === 0) {
+                            ctx.moveTo(px, py);
+                        } else {
+                            ctx.lineTo(px, py);
                         }
-                    };
+                    }
 
-                    roughLine(z.x, z.y, z.x + z.w, z.y); // Top
-                    roughLine(z.x + z.w, z.y, z.x + z.w, z.y + z.h); // Right
-                    roughLine(z.x + z.w, z.y + z.h, z.x, z.y + z.h); // Bottom
-                    roughLine(z.x, z.y + z.h, z.x, z.y); // Left
-
+                    ctx.closePath();
                     ctx.stroke();
                 }
 
+                // Draw shrinking indicator if shrinking
+                const now = Date.now();
+                if (now - this.lastEliminationTime > APEX_CONFIG.stalemateTime) {
+                    ctx.strokeStyle = 'rgba(255,0,0,0.6)';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([10, 10]);
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r - 20, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.restore();
+            }
+
+            drawTrailblazerTrails() {
+                if (this.trailblazerTrails.length === 0) return;
+
+                const ctx = this.gCtx;
+                ctx.save();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = ROLES.trailblazer.color;
+
+                this.trailblazerTrails.forEach(point => {
+                    const age = (Date.now() - point.timestamp) / (APEX_CONFIG.trailLifetime * (1000 / 60));
+                    const alpha = 1 - age;
+                    ctx.globalAlpha = alpha * 0.7;
+                    ctx.fillStyle = point.color;
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                ctx.globalAlpha = 1;
                 ctx.restore();
             }
 
@@ -945,6 +1284,16 @@ SHADE</textarea>
 
                 this.dead = false;
                 this.cooldown = 0;
+                this.deathOrder = 0; // 0 = alive, higher = died earlier
+
+                // Phase 2: Role properties
+                this.role = null;
+                this.emoji = '';
+                this.lives = 1;
+                this.ninjaSwapCooldown = 0;
+                this.glitchTeleportCooldown = 0;
+                this.ghostInvincible = false;
+                this.ghostInvincibleTime = 0;
             }
 
             update(game, speedMultiplier = 1.0) {
@@ -954,15 +1303,35 @@ SHADE</textarea>
                 this.x += this.vx * speedMultiplier;
                 this.y += this.vy * speedMultiplier;
 
-                // Wall Bounce
-                const bounds = (game.gameState === 'FFA' && game.dangerZone) ?
-                    { xmin: game.dangerZone.x, xmax: game.dangerZone.x + game.dangerZone.w, ymin: game.dangerZone.y, ymax: game.dangerZone.y + game.dangerZone.h } :
-                    { xmin: 0, xmax: game.width, ymin: 0, ymax: game.height };
+                // Boundary handling depends on game state
+                if (game.gameState === 'APEX' && game.arenaRadius > 0) {
+                    // CIRCULAR BOUNDARY - Bounce off inside of circle
+                    const dx = this.x - game.arenaCenter.x;
+                    const dy = this.y - game.arenaCenter.y;
+                    const dist = Math.hypot(dx, dy);
 
-                if (this.x < bounds.xmin + this.radius) { this.x = bounds.xmin + this.radius; this.vx *= -1; }
-                if (this.x > bounds.xmax - this.radius) { this.x = bounds.xmax - this.radius; this.vx *= -1; }
-                if (this.y < bounds.ymin + this.radius) { this.y = bounds.ymin + this.radius; this.vy *= -1; }
-                if (this.y > bounds.ymax - this.radius) { this.y = bounds.ymax - this.radius; this.vy *= -1; }
+                    if (dist + this.radius > game.arenaRadius) {
+                        // Calculate normal (pointing toward center)
+                        const nx = -dx / dist;
+                        const ny = -dy / dist;
+
+                        // Position: push back inside
+                        const overflow = dist + this.radius - game.arenaRadius;
+                        this.x += nx * overflow;
+                        this.y += ny * overflow;
+
+                        // Reflect velocity off the tangent (bounce)
+                        const dot = this.vx * nx + this.vy * ny;
+                        this.vx -= 2 * dot * nx;
+                        this.vy -= 2 * dot * ny;
+                    }
+                } else {
+                    // RECTANGULAR BOUNDARY - Standard wall bounce
+                    if (this.x < this.radius) { this.x = this.radius; this.vx *= -1; }
+                    if (this.x > game.width - this.radius) { this.x = game.width - this.radius; this.vx *= -1; }
+                    if (this.y < this.radius) { this.y = this.radius; this.vy *= -1; }
+                    if (this.y > game.height - this.radius) { this.y = game.height - this.radius; this.vy *= -1; }
+                }
 
                 // Paint Trail (Frequency check to save perf if needed, but per-frame is smoother)
                 if (Math.random() > 0.1) {
@@ -993,6 +1362,11 @@ SHADE</textarea>
                 ctx.save();
                 ctx.translate(this.x, this.y);
 
+                // Ghost transparency when invincible
+                if (this.ghostInvincible) {
+                    ctx.globalAlpha = 0.3;
+                }
+
                 // Glow
                 ctx.shadowBlur = 20;
                 ctx.shadowColor = this.color;
@@ -1009,13 +1383,32 @@ SHADE</textarea>
                 ctx.arc(0, 0, this.radius * 0.7, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Name
+                // Tank lives indicator
+                if (this.role === 'tank' && this.lives > 1) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('x' + this.lives, 0, 0);
+                }
+
+                ctx.globalAlpha = 1;
                 ctx.shadowBlur = 0;
+
+                // Emoji above (if has role)
+                if (this.emoji) {
+                    ctx.font = '20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'bottom';
+                    ctx.fillText(this.emoji, 0, -this.radius - 22);
+                }
+
+                // Name
                 ctx.fillStyle = "#fff";
                 ctx.font = "bold 14px 'Audiowide', sans-serif";
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
-                ctx.fillText(this.name, 0, -this.radius - 15);
+                ctx.fillText(this.name, 0, -this.radius - 8);
 
                 ctx.restore();
             }
