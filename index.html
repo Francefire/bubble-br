@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Royale Visualization</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --accent-color: #FF0055;
+            --secondary-color: #00CCFF;
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Setup Screen */
+        #setup-screen {
+            position: absolute;
+            z-index: 10;
+            background: rgba(30, 30, 30, 0.95);
+            padding: 2rem;
+            border-radius: 20px;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--glass-border);
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.5s ease;
+        }
+
+        h1 {
+            font-weight: 900;
+            font-size: 2rem;
+            background: linear-gradient(135deg, var(--accent-color), var(--secondary-color));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: white;
+            padding: 1rem;
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            resize: none;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        textarea:focus {
+            border-color: var(--secondary-color);
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--accent-color), #cc0044);
+            border: none;
+            padding: 1rem 2rem;
+            color: white;
+            font-weight: 700;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 10px 20px rgba(255, 0, 85, 0.3);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(255, 0, 85, 0.5);
+        }
+
+        button:active {
+            transform: translateY(1px);
+        }
+
+        /* Canvas */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            padding: 2rem;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .hud-visible {
+            opacity: 1 !important;
+        }
+
+        #alive-counter {
+            position: absolute;
+            top: 2rem;
+            left: 2rem;
+            font-size: 2rem;
+            font-weight: 900;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        #kill-feed {
+            position: absolute;
+            top: 2rem;
+            right: 2rem;
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .kill-msg {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            animation: slideIn 0.3s ease-out forwards;
+            opacity: 0;
+            transform: translateX(20px);
+        }
+
+        @keyframes slideIn {
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Win Screen */
+        #win-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 20;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s;
+            backdrop-filter: blur(5px);
+        }
+
+        .win-visible {
+            opacity: 1 !important;
+            pointer-events: all !important;
+        }
+
+        #winner-text {
+            font-size: 5rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 2rem;
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 50px rgba(255, 215, 0, 0.5);
+            transform: scale(0.8);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .win-visible #winner-text {
+            transform: scale(1);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Setup Screen -->
+    <div id="setup-screen">
+        <h1>Battle Royale</h1>
+        <p style="color: #aaa; font-size: 0.9rem;">Zero-Input Spectator Arena</p>
+        <textarea id="name-input" placeholder="Paste names here (one per line)...&#10;Alice&#10;Bob&#10;Charlie&#10;Dave"></textarea>
+        <button id="start-btn">Start Battle</button>
+    </div>
+
+    <!-- Game Arena -->
+    <canvas id="arena"></canvas>
+
+    <!-- HUD -->
+    <div id="hud">
+        <div id="alive-counter">Alive: 0</div>
+        <div id="kill-feed"></div>
+    </div>
+
+    <!-- Win Screen -->
+    <div id="win-screen">
+        <h1 id="winner-text">WINNER</h1>
+        <button id="restart-btn">New Battle</button>
+    </div>
+
+    <script>
+        // --- Constants & Config ---
+        const COLORS = [
+            '#FF0055', '#00CCFF', '#00FF99', '#FFFF00', '#FF3300', '#9900FF', 
+            '#FF6600', '#00FFCC', '#FF00CC', '#33FF00', '#0066FF', '#CCFF00'
+        ];
+        
+        const GRAVITY = 0; // Top-down view, no gravity
+        const DRAG = 1; // No friction in space
+        const BOUNCE = 1; // Perfectly elastic wall collisions
+        const MIN_SPEED = 2;
+        const MAX_Speed = 5;
+
+        // --- Utils ---
+        const rand = (min, max) => Math.random() * (max - min) + min;
+        const randColor = () => COLORS[Math.floor(Math.random() * COLORS.length)];
+
+        // --- Classes ---
+        class Player {
+            constructor(name, x, y) {
+                this.name = name;
+                this.x = x;
+                this.y = y;
+                this.radius = 25;
+                this.color = randColor();
+                
+                // Random velocity
+                const angle = Math.random() * Math.PI * 2;
+                const speed = rand(MIN_SPEED, MAX_Speed);
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+
+                this.mass = 1;
+                this.dead = false;
+                this.cooldown = 0; // Frames until can collide again
+                this.growthTarget = this.radius;
+            }
+
+            update(canvasWidth, canvasHeight) {
+                if (this.dead) return;
+
+                // Move
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Bounce off walls
+                if (this.x - this.radius < 0) {
+                    this.x = this.radius;
+                    this.vx *= -1;
+                } else if (this.x + this.radius > canvasWidth) {
+                    this.x = canvasWidth - this.radius;
+                    this.vx *= -1;
+                }
+
+                if (this.y - this.radius < 0) {
+                    this.y = this.radius;
+                    this.vy *= -1;
+                } else if (this.y + this.radius > canvasHeight) {
+                    this.y = canvasHeight - this.radius;
+                    this.vy *= -1;
+                }
+
+                // Growth animation
+                if (this.radius < this.growthTarget) {
+                    this.radius += 0.5;
+                }
+
+                // Cooldown decay
+                if (this.cooldown > 0) this.cooldown--;
+            }
+
+            draw(ctx) {
+                if (this.dead) return;
+
+                // Glow
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.color;
+
+                // Body
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.closePath();
+
+                ctx.shadowBlur = 0;
+
+                // Border
+                ctx.strokeStyle = "rgba(255,255,255,0.8)";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // Name Label
+                ctx.fillStyle = "white";
+                ctx.font = "bold 14px Inter, sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(this.name, this.x, this.y);
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = rand(2, 8);
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.decay = rand(0.02, 0.05);
+                this.size = rand(3, 6);
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+                this.size *= 0.95;
+            }
+
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('arena');
+                this.ctx = this.canvas.getContext('2d');
+                this.players = [];
+                this.particles = [];
+                this.running = false;
+                this.totalPlayers = 0;
+                
+                // Elements
+                this.setupScreen = document.getElementById('setup-screen');
+                this.hud = document.getElementById('hud');
+                this.winScreen = document.getElementById('win-screen');
+                this.aliveCounter = document.getElementById('alive-counter');
+                this.killFeed = document.getElementById('kill-feed');
+                this.winnerText = document.getElementById('winner-text');
+                this.nameInput = document.getElementById('name-input');
+
+                // Resize listener
+                window.addEventListener('resize', () => this.resize());
+                this.resize();
+
+                // Bindings
+                document.getElementById('start-btn').addEventListener('click', () => this.start());
+                document.getElementById('restart-btn').addEventListener('click', () => this.reset());
+
+                // Loop
+                requestAnimationFrame(() => this.loop());
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            start() {
+                const rawText = this.nameInput.value.trim();
+                const names = rawText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+
+                if (names.length < 2) {
+                    alert("Please enter at least 2 names!");
+                    return;
+                }
+
+                this.players = [];
+                this.particles = [];
+                this.totalPlayers = names.length;
+
+                // Spawn players nicely spread out
+                names.forEach(name => {
+                    const x = rand(100, this.canvas.width - 100);
+                    const y = rand(100, this.canvas.height - 100);
+                    this.players.push(new Player(name, x, y));
+                });
+
+                this.setupScreen.classList.add('hidden');
+                this.hud.classList.add('hud-visible');
+                this.running = true;
+                this.updateHUD();
+            }
+
+            reset() {
+                this.running = false;
+                this.winScreen.classList.remove('win-visible');
+                this.hud.classList.remove('hud-visible');
+                this.setupScreen.classList.remove('hidden');
+                this.players = [];
+                this.particles = [];
+                this.killFeed.innerHTML = '';
+            }
+
+            spawnExplosion(x, y, color) {
+                for (let i = 0; i < 20; i++) {
+                    this.particles.push(new Particle(x, y, color));
+                }
+            }
+
+            addToKillFeed(winner, loser) {
+                const msg = document.createElement('div');
+                msg.className = 'kill-msg';
+                msg.innerHTML = `<span style="color:${winner.color}">${winner.name}</span> <span style="color:#aaa">eliminated</span> <span style="color:${loser.color}">${loser.name}</span>`;
+                this.killFeed.prepend(msg);
+                
+                // Remove after delay
+                setTimeout(() => {
+                    msg.style.opacity = '0';
+                    setTimeout(() => msg.remove(), 500);
+                }, 4000);
+            }
+
+            updateHUD() {
+                const alive = this.players.filter(p => !p.dead).length;
+                this.aliveCounter.innerText = `Alive: ${alive} / ${this.totalPlayers}`;
+            }
+
+            resolveCombat(p1, p2) {
+                if (p1.dead || p2.dead) return;
+                
+                // 50/50 Chance
+                const winner = Math.random() > 0.5 ? p1 : p2;
+                const loser = winner === p1 ? p2 : p1;
+
+                // Kill loser
+                loser.dead = true;
+                this.spawnExplosion(loser.x, loser.y, loser.color);
+
+                // Buff winner
+                winner.growthTarget += 5;
+                
+                // Physics impulse for winner (bounce off the ghost of the loser)
+                const angle = Math.atan2(winner.y - loser.y, winner.x - loser.x);
+                const boost = 3;
+                winner.vx = Math.cos(angle) * (Math.abs(winner.vx) + boost);
+                winner.vy = Math.sin(angle) * (Math.abs(winner.vy) + boost);
+                
+                // Add Cooldown to winner to prevent instant multi-collisions
+                winner.cooldown = 10;
+
+                this.addToKillFeed(winner, loser);
+                this.updateHUD();
+                this.checkWinCondition();
+            }
+
+            checkWinCondition() {
+                const alive = this.players.filter(p => !p.dead);
+                if (alive.length === 1) {
+                    this.endGame(alive[0]);
+                }
+            }
+
+            endGame(winner) {
+                this.running = false;
+                this.winnerText.innerText = `WINNER: ${winner.name}`;
+                this.winnerText.style.color = winner.color;
+                this.winScreen.classList.add('win-visible');
+            }
+
+            checkCollisions() {
+                for (let i = 0; i < this.players.length; i++) {
+                    for (let j = i + 1; j < this.players.length; j++) {
+                        const p1 = this.players[i];
+                        const p2 = this.players[j];
+
+                        if (p1.dead || p2.dead) continue;
+                        if (p1.cooldown > 0 || p2.cooldown > 0) continue;
+
+                        const dx = p1.x - p2.x;
+                        const dy = p1.y - p2.y;
+                        const dist = Math.hypot(dx, dy);
+
+                        if (dist < p1.radius + p2.radius) {
+                            this.resolveCombat(p1, p2);
+                        }
+                    }
+                }
+            }
+
+            loop() {
+                // Clear
+                this.ctx.fillStyle = "#1a1a1a";
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                if (this.running) {
+                    // Update
+                    this.players.forEach(p => p.update(this.canvas.width, this.canvas.height));
+                    this.particles.forEach((p, index) => {
+                        p.update();
+                        if (p.life <= 0) this.particles.splice(index, 1);
+                    });
+
+                    this.checkCollisions();
+                }
+
+                // Draw
+                this.players.forEach(p => p.draw(this.ctx));
+                this.particles.forEach(p => p.draw(this.ctx));
+
+                requestAnimationFrame(() => this.loop());
+            }
+        }
+
+        // Init
+        window.onload = () => new Game();
+
+    </script>
+</body>
+</html>
