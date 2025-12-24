@@ -637,7 +637,8 @@ SHADE</textarea>
             ghostInvincibleTime: 120,
             webLifetime: 4000,
             vampireAuraRadius: 150,
-            vampireDeathChance: 0.005,
+            vampireDrainRate: 0.005,
+            vampireRecoverRate: 0.002,
             stalemateTime: 10000,
             shrinkRate: 25
         };
@@ -1365,19 +1366,30 @@ SHADE</textarea>
                     }
                 });
 
-                // Vampire Logic
-                active.forEach(p => {
-                    if (p.role === 'vampire') {
-                        active.forEach(victim => {
-                            if (p === victim || victim.ghostInvincible) return;
-                            if (p.pos.dist(victim.pos) <= APEX_CONFIG.vampireAuraRadius) {
-                                // Chance to kill (Drain Life)
-                                if (random() < APEX_CONFIG.vampireDeathChance) {
-                                    this.log(`🦇 ${p.name} a drainé ${victim.name}`, 'capacité');
-                                    this.kill(p, victim, 'DRAINE');
-                                }
+                // Vampire Logic & Recover
+                active.forEach(victim => {
+                    let beingDrained = false;
+                    let sourceVampire = null;
+
+                    if (victim.role !== 'vampire' && !victim.ghostInvincible) {
+                        for (let p of active) {
+                            if (p.role === 'vampire' && p.pos.dist(victim.pos) <= APEX_CONFIG.vampireAuraRadius) {
+                                beingDrained = true;
+                                sourceVampire = p;
+                                break;
                             }
-                        });
+                        }
+                    }
+
+                    if (beingDrained) {
+                        victim.vampireDrainMeter = min(1.0, victim.vampireDrainMeter + APEX_CONFIG.vampireDrainRate);
+                        if (victim.vampireDrainMeter >= 1.0) {
+                            this.log(`🦇 ${sourceVampire.name} a drainé ${victim.name}`, 'capacité');
+                            this.kill(sourceVampire, victim, 'DRAINE');
+                            victim.vampireDrainMeter = 0; // Reset just in case (though they are dead)
+                        }
+                    } else {
+                        victim.vampireDrainMeter = max(0, victim.vampireDrainMeter - APEX_CONFIG.vampireRecoverRate);
                     }
                 });
             }
@@ -1593,6 +1605,8 @@ SHADE</textarea>
                 // Assassin degrading win chance
                 this.assassinWinChance = 0.8; // Start at 80%
                 this.assassinFightsCount = 0;
+
+                this.vampireDrainMeter = 0;
             }
 
             update(game, speedMult) {
@@ -1773,6 +1787,15 @@ SHADE</textarea>
                         color: '#0066FF',
                         text: cooldownSec > 0 ? `${cooldownSec}s` : '✓',
                         tooltip: cooldownSec > 0 ? `Échange dans ${cooldownSec}s` : 'Échange Prêt'
+                    });
+                }
+
+                if (this.vampireDrainMeter > 0) {
+                    passives.push({
+                        icon: '🦇',
+                        color: '#FF0055',
+                        text: `${Math.round(this.vampireDrainMeter * 100)}%`,
+                        tooltip: `DRAIN : ${Math.round(this.vampireDrainMeter * 100)}%`
                     });
                 }
 
