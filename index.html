@@ -348,6 +348,13 @@ SHADE</textarea>
                 this.running = false;
                 this.gracePeriod = 0;
 
+                // Slow-motion system for suspense
+                this.slowMotion = false;
+                this.slowMotionFactor = 0.3; // How slow (0.3 = 30% speed)
+                this.slowMotionDelay = 0; // Frames to wait before turning off
+                this.slowMotionDelayFrames = 30; // ~0.5 seconds at 60fps
+                this.playerDistances = new Map(); // Track previous distances
+
                 window.addEventListener('resize', () => this.resize());
                 this.resize();
 
@@ -484,7 +491,14 @@ SHADE</textarea>
                         if (this.gracePeriod === 0) this.updatePhaseUI();
                     }
 
-                    this.players.forEach(p => p.update(this));
+                    // Check for slow-motion trigger (under 10 players)
+                    this.updateSlowMotion();
+
+                    // Apply slow-motion by running updates multiple times or adjusting speeds
+                    const updateIterations = this.slowMotion ? 1 : 1;
+                    const speedMultiplier = this.slowMotion ? this.slowMotionFactor : 1.0;
+
+                    this.players.forEach(p => p.update(this, speedMultiplier));
                     this.checkCollisions();
 
                     // Render Players
@@ -502,6 +516,56 @@ SHADE</textarea>
                 this.gCtx.globalCompositeOperation = 'source-over';
 
                 requestAnimationFrame(this.loop);
+            }
+
+            updateSlowMotion() {
+                const active = this.players.filter(p => !p.dead);
+
+                // Only when under 10 players and combat has started
+                if (active.length >= 10 || this.gracePeriod > 0) {
+                    this.slowMotion = false;
+                    this.playerDistances.clear();
+                    return;
+                }
+
+                let shouldSlowDown = false;
+                const dangerThreshold = 150; // Distance threshold for slow-motion
+
+                // Check all pairs of players
+                for (let i = 0; i < active.length; i++) {
+                    for (let j = i + 1; j < active.length; j++) {
+                        const p1 = active[i];
+                        const p2 = active[j];
+
+                        const dx = p1.x - p2.x;
+                        const dy = p1.y - p2.y;
+                        const dist = Math.hypot(dx, dy);
+
+                        // Create unique pair ID
+                        const pairId = `${p1.id}_${p2.id}`;
+                        const prevDist = this.playerDistances.get(pairId);
+
+                        // Store current distance
+                        this.playerDistances.set(pairId, dist);
+
+                        // Check if players are close AND getting closer
+                        if (dist < dangerThreshold && prevDist !== undefined && dist < prevDist) {
+                            shouldSlowDown = true;
+                        }
+                    }
+                }
+
+                // Handle slow-motion state with delay
+                if (shouldSlowDown) {
+                    this.slowMotion = true;
+                    this.slowMotionDelay = this.slowMotionDelayFrames; // Reset delay
+                } else if (this.slowMotion) {
+                    // Countdown delay before turning off
+                    this.slowMotionDelay--;
+                    if (this.slowMotionDelay <= 0) {
+                        this.slowMotion = false;
+                    }
+                }
             }
 
             checkCollisions() {
@@ -768,12 +832,12 @@ SHADE</textarea>
                 this.cooldown = 0;
             }
 
-            update(game) {
+            update(game, speedMultiplier = 1.0) {
                 if (this.dead) return;
 
-                // Move
-                this.x += this.vx;
-                this.y += this.vy;
+                // Move (with slow-motion support)
+                this.x += this.vx * speedMultiplier;
+                this.y += this.vy * speedMultiplier;
 
                 // Wall Bounce
                 if (this.x < 0 + this.radius) { this.x = this.radius; this.vx *= -1; }
