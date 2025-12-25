@@ -523,6 +523,102 @@
                 opacity: 1;
             }
         }
+
+        /* Explanation Overlay */
+        #explanation-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        #explanation-overlay.visible {
+            display: flex;
+        }
+
+        .explanation-content {
+            background: var(--concrete);
+            border: 4px solid var(--accent);
+            padding: 2rem;
+            max-width: 900px;
+            width: 100%;
+            box-shadow: 10px 10px 0px var(--accent);
+            position: relative;
+        }
+
+        .explanation-title {
+            font-family: 'Rubik Glitch', cursive;
+            font-size: 3rem;
+            color: var(--neon-blue);
+            text-align: center;
+            margin-bottom: 1rem;
+            text-shadow: 3px 3px 0px var(--accent);
+        }
+
+        .explanation-subtitle {
+            font-family: var(--ui-font);
+            font-size: 1.2rem;
+            color: #fff;
+            text-align: center;
+            margin-bottom: 2rem;
+            text-transform: uppercase;
+        }
+
+        .roles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .role-card {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .role-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--accent);
+        }
+
+        .role-card-emoji {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .role-card-name {
+            font-family: var(--ui-font);
+            color: var(--neon-green);
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .role-card-desc {
+            font-size: 0.85rem;
+            color: #ccc;
+            line-height: 1.4;
+        }
+
+        .explanation-btn-container {
+            display: flex;
+            justify-content: center;
+            margin-top: 1rem;
+        }
     </style>
 </head>
 
@@ -573,6 +669,63 @@ SHADE</textarea>
     <!-- HUD Action Log -->
     <div id="action-log-hud"></div>
 
+    <!-- Explanation Overlay -->
+    <div id="explanation-overlay" style="box-sizing: border-box;">
+        <div class="explanation-content" style="box-sizing: border-box;">
+            <h2 class="explanation-title">L'ARÈNE SUPRÊME</h2>
+            <div class="explanation-subtitle">8 Champions • 1 Survivant • Quel sera votre destin ?</div>
+
+            <div id="roles-display" class="roles-grid">
+                <div class="role-card">
+                    <div class="role-card-emoji">🥷</div>
+                    <div class="role-card-name">NINJA</div>
+                    <div class="role-card-desc">Peut changer de place avec l'adversaire le plus proche.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">🕸️</div>
+                    <div class="role-card-name">MAÎTRE-TOILE</div>
+                    <div class="role-card-desc">Laisse une traînée de toile qui ralentit les ennemis.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">🛡️</div>
+                    <div class="role-card-name">TANK</div>
+                    <div class="role-card-desc">Dispose d'un bouclier directionnel en 3 parties qui repousse les
+                        ennemis.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">🗡️</div>
+                    <div class="role-card-name">ASSASSIN</div>
+                    <div class="role-card-desc">80% de chance de victoire initiale, mais s'affaiblit après chaque
+                        combat.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">🦇</div>
+                    <div class="role-card-name">VAMPIRE</div>
+                    <div class="role-card-desc">Draine la vie des ennemis proches via une aura de sang.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">💣</div>
+                    <div class="role-card-name">MARTYRE</div>
+                    <div class="role-card-desc">Explose à sa mort, éliminant les ennemis dans la zone.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">👾</div>
+                    <div class="role-card-name">ANOMALIE</div>
+                    <div class="role-card-desc">Se téléporte aléatoirement dans l'arène.</div>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-emoji">👻</div>
+                    <div class="role-card-name">FANTÔME</div>
+                    <div class="role-card-desc">Devient intangible et invincible périodiquement.</div>
+                </div>
+            </div>
+
+            <div class="explanation-btn-container">
+                <button id="start-phase2-btn" class="btn">COMMENCER LE COMBAT</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Debug HUD -->
     <div id="debug-hud">
         <h3>⚙️ PANEL</h3>
@@ -582,6 +735,11 @@ SHADE</textarea>
             <button class="debug-btn" id="debug-pause">Pause</button>
             <button class="debug-btn" id="debug-skip-phase2">Passer à la Phase 2</button>
             <button class="debug-btn" id="debug-clear-canvas">Effacer le Canevas</button>
+            <div
+                style="margin-top: 1rem; display: flex; align-items: center; gap: 0.5rem; color: #fff; font-family: monospace; font-size: 0.8rem;">
+                <input type="checkbox" id="debug-toggle-trails" style="cursor: pointer;">
+                <label for="debug-toggle-trails" style="cursor: pointer;">Afficher les traînées</label>
+            </div>
         </div>
 
         <div class="debug-section">
@@ -597,7 +755,7 @@ SHADE</textarea>
             <div class="speed-display" id="speed-display">1.00x</div>
         </div>
 
-        <div class="debug-section">
+        <div class="debug-section" style="display: none;">
             <div class="debug-label">Journal d'Action</div>
             <div id="debug-log"></div>
         </div>
@@ -616,7 +774,8 @@ SHADE</textarea>
                 cyan: '#00F3FF',
                 magenta: '#FF1493'
             },
-            traitorGold: '#FFD700'
+            traitorGold: '#FFD700',
+            showTrails: false
         };
 
         const ROLES = {
@@ -635,6 +794,7 @@ SHADE</textarea>
             ninjaSwapRange: 60,
             glitchTeleportInterval: 240,
             ghostInvincibleTime: 120,
+            ghostInvincibleCooldown: 300,
             webLifetime: 4000,
             vampireAuraRadius: 150,
             vampireDrainRate: 0.01,
@@ -665,6 +825,7 @@ SHADE</textarea>
             select('#restart-btn').mousePressed(() => game.reset());
             select('#import-btn').mousePressed(() => select('#csv-input').elt.click());
             select('#csv-input').changed((e) => game.handleFileUpload(e));
+            select('#start-phase2-btn').mousePressed(() => game.startPhase2());
 
             // Debug Controls
             game.setupDebugControls();
@@ -1062,7 +1223,6 @@ SHADE</textarea>
                 if (arcIndex !== undefined && tank.shieldArcs) {
                     tank.shieldArcs[arcIndex] = false;
                 }
-                tank.lives--;
 
                 // Set cooldowns
                 tank.cooldown = 30;
@@ -1072,8 +1232,9 @@ SHADE</textarea>
                 this.spawnParticles(tank.pos.x, tank.pos.y, '#FFFFFF', 20);
 
                 // Log the shield hit
-                if (tank.lives > 1) {
-                    this.log(`🛡️ ${attacker.name} a rebondi sur un segment du bouclier de ${tank.name} ! (${tank.lives - 1} restants)`, 'capacité');
+                const remainingArcs = tank.shieldArcs.filter(a => a).length;
+                if (remainingArcs > 0) {
+                    this.log(`🛡️ ${attacker.name} a rebondi sur un segment du bouclier de ${tank.name} ! (${remainingArcs} segments restants)`, 'capacité');
                 } else {
                     this.log(`🛡️ Dernier bouclier de ${tank.name} détruit par ${attacker.name} !`, 'capacité');
                 }
@@ -1335,10 +1496,17 @@ SHADE</textarea>
                         // REMOVED: Don't teleport, let zone push them in.
                         p.vel = p5.Vector.random2D().mult(random(CONFIG.minSpeed, CONFIG.maxSpeed));
 
-                        if (key === 'tank') {
-                            p.lives = 4; // 3 shields + 1 life
+                        if (key === 'ghost') {
+                            p.lives = 3;
+                            p.ghostInvincible = false;
+                            p.ghostInvincibleTimeStep = 0;
+                            p.ghostInvincibleCooldown = 60; // Initial delay
+                        } else if (key === 'tank') {
+                            p.lives = 3;
                             p.shieldArcs = [true, true, true];
-                            p.radius = CONFIG.radius * 2; // Much bigger tank
+                            p.radius = CONFIG.radius * 2;
+                        } else {
+                            p.lives = 3;
                         }
                         p.ninjaSwapCooldown = 0;
                         p.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
@@ -1350,13 +1518,22 @@ SHADE</textarea>
 
                     el.html("L'ARÈNE SUPRÊME");
                     el.style('color', '#FFD700');
+
+                    // Show explanation screen and wait for user
                     setTimeout(() => {
                         el.style('display', 'none');
-                        this.gameState = 'APEX';
-                        this.updateCount();
+                        select('#explanation-overlay').addClass('visible');
+                        this.paused = true; // Pause physics while explaining
                     }, 2000);
-
                 }, 3000);
+            }
+
+            startPhase2() {
+                select('#explanation-overlay').removeClass('visible');
+                this.paused = false;
+                this.gameState = 'APEX';
+                this.updateCount();
+                this.log('⚔️ LE COMBAT FINAL COMMENCE !', 'système');
             }
 
             updateArenaShrinking() {
@@ -1452,10 +1629,20 @@ SHADE</textarea>
                     }
                     if (p.role === 'ghost') {
                         if (p.ghostInvincible) {
-                            p.ghostInvincibleTime--;
-                            if (p.ghostInvincibleTime <= 0) {
+                            p.ghostInvincibleTimeStep--;
+                            if (p.ghostInvincibleTimeStep <= 0) {
                                 p.ghostInvincible = false;
+                                p.ghostInvincibleCooldown = APEX_CONFIG.ghostInvincibleCooldown;
                                 this.log(`👻 ${p.name} n'est plus invincible`, 'capacité');
+                            }
+                        } else {
+                            if (p.ghostInvincibleCooldown > 0) {
+                                p.ghostInvincibleCooldown--;
+                            } else {
+                                p.ghostInvincible = true;
+                                p.ghostInvincibleTimeStep = APEX_CONFIG.ghostInvincibleTime;
+                                this.log(`👻 ${p.name} devient intangible !`, 'capacité');
+                                this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 10);
                             }
                         }
                     }
@@ -1671,6 +1858,16 @@ SHADE</textarea>
                     this.log('🧹 Canevas effacé', 'système');
                 });
 
+                // Toggle Trails
+                const trailToggle = select('#debug-toggle-trails');
+                if (trailToggle) {
+                    trailToggle.elt.checked = CONFIG.showTrails;
+                    trailToggle.changed(() => {
+                        CONFIG.showTrails = trailToggle.elt.checked;
+                        this.log(`🎨 Traînées : ${CONFIG.showTrails ? 'ON' : 'OFF'}`, 'système');
+                    });
+                }
+
                 // Speed controls
                 const speeds = [
                     { id: 'debug-speed-025', value: 0.25 },
@@ -1710,6 +1907,8 @@ SHADE</textarea>
                 this.emoji = '';
                 this.lives = 1;
                 this.ghostInvincible = false;
+                this.ghostInvincibleTimeStep = 0;
+                this.ghostInvincibleCooldown = 0;
                 this.glitchTeleportCooldown = 0;
                 this.webSlowTimer = 0;
                 this.webSlowSource = null; // Track which player is slowing us
@@ -1762,21 +1961,22 @@ SHADE</textarea>
                 if (this.cooldown > 0) this.cooldown--;
 
                 // Paint trail (Continuous Stroke)
-                // Paint trail (Continuous Stroke)
-                let d = this.prevPos.dist(this.pos);
-                if (d < this.radius * 2) { // Only draw if moved a reasonable distance (prevents teleport streaks)
-                    let c = color(this.color);
-                    c.setAlpha(60); // Low opacity for spray paint effect
+                if (CONFIG.showTrails) {
+                    let d = this.prevPos.dist(this.pos);
+                    if (d < this.radius * 2) { // Only draw if moved a reasonable distance (prevents teleport streaks)
+                        let c = color(this.color);
+                        c.setAlpha(60); // Low opacity for spray paint effect
 
-                    paintLayer.stroke(c);
-                    paintLayer.strokeWeight(this.radius * 0.8 * 2);
-                    paintLayer.strokeCap(ROUND);
-                    // Use lines to avoid "dots"
-                    paintLayer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
+                        paintLayer.stroke(c);
+                        paintLayer.strokeWeight(this.radius * 0.8 * 2);
+                        paintLayer.strokeCap(ROUND);
+                        // Use lines to avoid "dots"
+                        paintLayer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
+                    }
                 }
 
                 // Occasional drip
-                if (random() > 0.95) {
+                if (CONFIG.showTrails && random() > 0.95) {
                     let c = color(this.color);
                     c.setAlpha(60);
                     paintLayer.noStroke();
@@ -1794,7 +1994,17 @@ SHADE</textarea>
                 push();
                 translate(this.pos.x, this.pos.y);
 
-                if (this.ghostInvincible) drawingContext.globalAlpha = 0.3;
+                if (this.ghostInvincible) {
+                    drawingContext.globalAlpha = 0.4;
+                    drawingContext.shadowBlur = 40;
+                    drawingContext.shadowColor = '#FFFFFF';
+                    // Extra ghostly glow circle
+                    push();
+                    noStroke();
+                    fill(255, 255, 255, 50);
+                    circle(0, 0, this.radius * 2.5 + sin(frameCount * 0.1) * 5);
+                    pop();
+                }
 
                 drawingContext.shadowBlur = 20;
                 drawingContext.shadowColor = this.color;
@@ -1846,10 +2056,35 @@ SHADE</textarea>
                 textFont('Audiowide');
                 text(this.name, 0, -this.radius - 12);
 
+                // Lives indicators (3 green dots)
+                if (game.gameState === 'APEX') {
+                    this.drawLivesIndicator();
+                }
+
                 // Role passive indicators (drawn around the sides)
                 this.drawRolePassives();
 
                 pop();
+            }
+
+            drawLivesIndicator() {
+                const dotSize = 10;
+                const spacing = 12;
+                const totalWidth = (3 * dotSize) + (2 * spacing);
+                const startX = -totalWidth / 2 + dotSize / 2;
+                const yPos = -this.radius - 55; // Above the role emoji if it exists
+
+                for (let i = 0; i < 3; i++) {
+                    if (i < this.lives) {
+                        fill(0, 255, 102); // Neon Green
+                        stroke(0);
+                        strokeWeight(1);
+                    } else {
+                        fill(50); // Gray for lost life
+                        noStroke();
+                    }
+                    circle(startX + i * spacing, yPos, dotSize);
+                }
             }
 
             drawRolePassives() {
