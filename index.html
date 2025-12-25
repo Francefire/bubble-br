@@ -959,6 +959,34 @@ SHADE</textarea>
                         const p2 = active[j];
 
                         const dist = p1.pos.dist(p2.pos);
+
+                        // Check for shield collision first (only in APEX mode)
+                        if (this.gameState === 'APEX') {
+                            // Check if p1 has shield and p2 hits it
+                            if (p1.lives > 1 && p1.role === 'tank') {
+                                const shieldRadius = p1.radius * 2.5;
+                                if (dist < shieldRadius + p2.radius && dist >= p1.radius + p2.radius) {
+                                    let arcIndex = this.getShieldArcIndex(p1, p2);
+                                    if (p1.shieldArcs[arcIndex]) {
+                                        this.handleShieldHit(p1, p2, arcIndex);
+                                        continue;
+                                    }
+                                }
+                            }
+                            // Check if p2 has shield and p1 hits it
+                            if (p2.lives > 1 && p2.role === 'tank') {
+                                const shieldRadius = p2.radius * 2.5;
+                                if (dist < shieldRadius + p1.radius && dist >= p2.radius + p1.radius) {
+                                    let arcIndex = this.getShieldArcIndex(p2, p1);
+                                    if (p2.shieldArcs[arcIndex]) {
+                                        this.handleShieldHit(p2, p1, arcIndex);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Regular collision detection
                         if (dist < p1.radius + p2.radius) {
                             if (this.gracePeriod > 0) {
                                 this.resolveElastic(p1, p2);
@@ -1013,16 +1041,53 @@ SHADE</textarea>
                 this.kill(winner, loser);
             }
 
+            getShieldArcIndex(tank, attacker) {
+                let angle = atan2(attacker.pos.y - tank.pos.y, attacker.pos.x - tank.pos.x);
+                // Adjust for rotation and normalize to [0, TWO_PI)
+                let relativeAngle = (angle - tank.shieldRotation) % TWO_PI;
+                if (relativeAngle < 0) relativeAngle += TWO_PI;
+
+                let angleStep = TWO_PI / 3;
+                return floor(relativeAngle / angleStep);
+            }
+
+            handleShieldHit(tank, attacker, arcIndex) {
+                if (arcIndex !== undefined && tank.shieldArcs && !tank.shieldArcs[arcIndex]) return;
+
+                // Bounce attacker away strongly
+                let dir = p5.Vector.sub(attacker.pos, tank.pos).normalize();
+                attacker.vel = dir.mult(12); // Strong bounce back
+
+                // Destroy specific shield arc
+                if (arcIndex !== undefined && tank.shieldArcs) {
+                    tank.shieldArcs[arcIndex] = false;
+                }
+                tank.lives--;
+
+                // Set cooldowns
+                tank.cooldown = 30;
+                attacker.cooldown = 30;
+
+                // Shield Break Effect
+                this.spawnParticles(tank.pos.x, tank.pos.y, '#FFFFFF', 20);
+
+                // Log the shield hit
+                if (tank.lives > 1) {
+                    this.log(`🛡️ ${attacker.name} a rebondi sur un segment du bouclier de ${tank.name} ! (${tank.lives - 1} restants)`, 'capacité');
+                } else {
+                    this.log(`🛡️ Dernier bouclier de ${tank.name} détruit par ${attacker.name} !`, 'capacité');
+                }
+            }
+
             kill(winner, loser, msg = 'ECLATE') {
                 if (loser.lives > 1) {
                     loser.lives--;
                     loser.cooldown = 30;
                     winner.cooldown = 20;
 
-                    // Bounce both away
+                    // Bounce Winner away (Loser Tank stays put or bounces less)
                     let dir = p5.Vector.sub(winner.pos, loser.pos).normalize();
                     winner.vel = dir.copy().mult(8);
-                    loser.vel = dir.copy().mult(-8);
 
                     // Shield Break Effect
                     this.spawnParticles(loser.pos.x, loser.pos.y, '#FFFFFF', 15);
@@ -1182,37 +1247,82 @@ SHADE</textarea>
                 el.style('text-align', 'center');
 
                 setTimeout(() => {
+                    let top8 = [];
                     const survivors = this.players.filter(p => !p.dead);
-                    const winningTeam = survivors[0].team;
-                    const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
 
-                    winningTeamPlayers.sort((a, b) => {
-                        if (!a.dead && b.dead) return -1;
-                        if (a.dead && !b.dead) return 1;
-                        if (!a.dead) return b.radius - a.radius;
-                        return b.deathOrder - a.deathOrder;
-                    });
-
-                    const top8 = winningTeamPlayers.slice(0, 8);
-                    const eliminated = winningTeamPlayers.slice(8);
-
-                    top8.forEach(p => {
-                        if (p.dead) {
-                            p.dead = false;
-                            p.radius = CONFIG.radius;
-                            this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
-                        }
-                    });
-
-                    eliminated.forEach(p => {
-                        if (!p.dead) {
+                    // Strategy 1: If we have 8+ alive players, use them
+                    if (survivors.length >= 8) {
+                        // Sort by radius (bigger = stronger)
+                        survivors.sort((a, b) => b.radius - a.radius);
+                        top8 = survivors.slice(0, 8);
+                        // Kill the rest
+                        survivors.slice(8).forEach(p => {
                             p.dead = true;
                             this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
-                        }
-                    });
+                        });
+                        this.players.filter(p => p.dead).forEach(p => p.dead = true);
+                    }
+                    // Strategy 2: Try to get 8 from winning team (alive + recently dead)
+                    else if (survivors.length > 0) {
+                        const winningTeam = survivors[0].team;
+                        const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
 
-                    this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
+                        winningTeamPlayers.sort((a, b) => {
+                            if (!a.dead && b.dead) return -1;
+                            if (a.dead && !b.dead) return 1;
+                            if (!a.dead) return b.radius - a.radius;
+                            return b.deathOrder - a.deathOrder;
+                        });
 
+                        top8 = winningTeamPlayers.slice(0, 8);
+                        const eliminated = winningTeamPlayers.slice(8);
+
+                        // Revive dead players in top 8
+                        top8.forEach(p => {
+                            if (p.dead) {
+                                p.dead = false;
+                                p.radius = CONFIG.radius;
+                                this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
+                            }
+                        });
+
+                        // Kill eliminated from winning team
+                        eliminated.forEach(p => {
+                            if (!p.dead) {
+                                p.dead = true;
+                                this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
+                            }
+                        });
+
+                        // Kill all losing team players
+                        this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
+                    }
+                    // Strategy 3: No clear winner, just pick any 8 players (alive first, then recently dead)
+                    else {
+                        const allPlayers = [...this.players];
+                        allPlayers.sort((a, b) => {
+                            if (!a.dead && b.dead) return -1;
+                            if (a.dead && !b.dead) return 1;
+                            if (!a.dead) return b.radius - a.radius;
+                            return b.deathOrder - a.deathOrder;
+                        });
+
+                        top8 = allPlayers.slice(0, 8);
+
+                        // Revive dead players in top 8
+                        top8.forEach(p => {
+                            if (p.dead) {
+                                p.dead = false;
+                                p.radius = CONFIG.radius;
+                                this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
+                            }
+                        });
+
+                        // Kill everyone else
+                        allPlayers.slice(8).forEach(p => p.dead = true);
+                    }
+
+                    // Assign roles to the top 8
                     const roleKeys = shuffle(Object.keys(ROLES));
                     top8.forEach((p, idx) => {
                         const key = roleKeys[idx];
@@ -1221,12 +1331,15 @@ SHADE</textarea>
                         p.emoji = role.emoji;
                         p.color = role.color;
                         p.team = null;
-                        p.team = null;
                         // p.pos = createVector(this.width / 2 + random(-30, 30), this.height / 2 + random(-30, 30)); 
                         // REMOVED: Don't teleport, let zone push them in.
                         p.vel = p5.Vector.random2D().mult(random(CONFIG.minSpeed, CONFIG.maxSpeed));
 
-                        if (key === 'tank') p.lives = 3;
+                        if (key === 'tank') {
+                            p.lives = 4; // 3 shields + 1 life
+                            p.shieldArcs = [true, true, true];
+                            p.radius = CONFIG.radius * 2; // Much bigger tank
+                        }
                         p.ninjaSwapCooldown = 0;
                         p.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
                     });
@@ -1607,6 +1720,8 @@ SHADE</textarea>
                 this.assassinFightsCount = 0;
 
                 this.vampireDrainMeter = 0;
+                this.shieldArcs = [true, true, true]; // Each represents a 120 deg arc
+                this.shieldRotation = 0;
             }
 
             update(game, speedMult) {
@@ -1692,34 +1807,26 @@ SHADE</textarea>
                 fill(this.color);
                 circle(0, 0, this.radius * 1.4);
 
-                // Tank Shield Visuals
-                if (this.lives > 1) {
+                // Tank Shield Visuals - 3 arcs forming a single circle
+                if (this.role === 'tank' && this.lives > 1) {
                     noFill();
-                    strokeWeight(3);
+                    strokeWeight(6);
+                    let shieldRadius = this.radius * 2.5;
+                    this.shieldRotation += 0.02; // Constant rotation
 
-                    for (let i = 0; i < this.lives - 1; i++) {
-                        stroke(255, 255, 255, 150);
-                        let radius = this.radius * 2 + (i * 8);
-                        let speed = (i % 2 === 0 ? 1 : -1) * (millis() / 1000);
+                    push();
+                    rotate(this.shieldRotation);
 
-                        push();
-                        rotate(speed);
-                        // Draw segmented ring
-                        let segments = 3;
-                        let angleStep = TWO_PI / segments;
-                        for (let j = 0; j < segments; j++) {
-                            arc(0, 0, radius, radius, j * angleStep, j * angleStep + angleStep * 0.6);
+                    let angleStep = TWO_PI / 3;
+                    for (let i = 0; i < 3; i++) {
+                        if (this.shieldArcs[i]) {
+                            stroke(255, 255, 255, 200);
+                            let startAngle = i * angleStep;
+                            let endAngle = startAngle + (angleStep * 0.85); // Small gaps between arcs
+                            arc(0, 0, shieldRadius * 2, shieldRadius * 2, startAngle, endAngle);
                         }
-                        pop();
                     }
-
-                    // Text for lives (keep it but maybe smaller/different ?)
-                    fill(255);
-                    noStroke();
-                    textAlign(CENTER, CENTER);
-                    textSize(12);
-                    textStyle(BOLD);
-                    text('BOUCLIER', 0, 0);
+                    pop();
                 }
 
                 drawingContext.shadowBlur = 0;
