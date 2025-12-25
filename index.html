@@ -138,7 +138,7 @@
             color: var(--neon-green);
             font-family: 'Courier New', monospace;
             font-weight: bold;
-            font-size: 1.1rem;
+            font-size: 1.2rem;
             padding: 1rem;
             margin-bottom: 2rem;
             resize: none;
@@ -204,7 +204,7 @@
             background: #000;
             color: #fff;
             padding: 0.5rem 1.5rem;
-            font-size: 1.5rem;
+            font-size: 1.7rem;
             border: 2px solid white;
             box-shadow: 4px 4px 0px var(--neon-blue);
             transform: skew(-10deg);
@@ -226,7 +226,7 @@
             color: #fff;
             padding: 0.5rem 1rem;
             border-left: 5px solid;
-            font-size: 1rem;
+            font-size: 1.15rem;
             font-family: monospace;
             text-transform: uppercase;
             animation: slideIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -541,7 +541,7 @@
             background: rgba(0, 0, 0, 0.6);
             border-left: 3px solid #00FF66;
             padding: 4px 8px;
-            font-size: 0.75rem;
+            font-size: 0.9rem;
             color: #fff;
             animation: slideInLeft 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             text-shadow: 1px 1px 2px #000;
@@ -656,11 +656,11 @@
             font-family: var(--ui-font);
             color: var(--neon-green);
             margin-bottom: 0.5rem;
-            font-size: 1.1rem;
+            font-size: 1.25rem;
         }
 
         .role-card-desc {
-            font-size: 0.85rem;
+            font-size: 1rem;
             color: #ccc;
             line-height: 1.4;
             margin-bottom: 0.5rem;
@@ -2355,9 +2355,9 @@
                 // Player name
                 fill(255);
                 textAlign(CENTER, CENTER);
-                textSize(14);
+                textSize(18);
                 textFont('Audiowide');
-                text(this.name, 0, -this.radius - 12);
+                text(this.name, 0, -this.radius - 16);
 
                 // Lives indicators (3 green dots)
                 if (game.gameState === 'APEX') {
