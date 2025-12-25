@@ -2126,6 +2126,21 @@
                     if (e.key === 'd' || e.key === 'D') {
                         select('#debug-hud').toggleClass('visible');
                     }
+                    // Spacebar to pause/unpause
+                    if (e.code === 'Space' && this.running) {
+                        e.preventDefault(); // Prevent page scroll
+                        this.paused = !this.paused;
+                        const btn = select('#debug-pause');
+                        if (this.paused) {
+                            btn.html('Resume');
+                            btn.addClass('active');
+                            this.log('⏸️ Jeu en pause', 'système');
+                        } else {
+                            btn.html('Pause');
+                            btn.removeClass('active');
+                            this.log('▶️ Jeu repris', 'système');
+                        }
+                    }
                 });
 
                 // Pause/Resume
