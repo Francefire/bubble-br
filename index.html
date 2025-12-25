@@ -1519,14 +1519,15 @@
                     loser.cooldown = 30;
                     winner.cooldown = 20;
 
-                    // Bounce Winner away (Loser Tank stays put or bounces less)
+                    // Bounce Winner away
                     let dir = p5.Vector.sub(winner.pos, loser.pos).normalize();
                     winner.vel = dir.copy().mult(8);
 
                     // Shield Break Effect
                     this.spawnParticles(loser.pos.x, loser.pos.y, '#FFFFFF', 15);
 
-                    this.log(`🛡️ Bouclier de ${loser.name} touché ! (${loser.lives - 1} restants)`, 'capacité');
+                    const livesMsg = this.gameState === 'TEAMS' ? `${loser.lives} restante${loser.lives > 1 ? 's' : ''}` : `${loser.lives - 1} restantes`;
+                    this.log(`🛡️ ${loser.name} perd une vie ! (${livesMsg})`, 'capacité');
                     return;
                 }
 
@@ -2223,7 +2224,7 @@
                 this.cooldown = 0;
                 this.role = null;
                 this.emoji = '';
-                this.lives = 1;
+                this.lives = team ? 2 : 1;  // 2 lives in Phase 1 (TEAMS mode), 1 in Phase 2 (will be set to 3)
                 this.ghostInvincible = false;
                 this.ghostInvincibleTimeStep = 0;
                 this.ghostInvincibleCooldown = 0;
@@ -2374,8 +2375,8 @@
                 textFont('Audiowide');
                 text(this.name, 0, -this.radius - 16);
 
-                // Lives indicators (3 green dots)
-                if (game.gameState === 'APEX') {
+                // Lives indicators (green dots for Phase 1 with 2 lives, Phase 2 with 3 lives)
+                if (game.gameState === 'APEX' || (game.gameState === 'TEAMS' && this.lives > 1)) {
                     this.drawLivesIndicator();
                 }
 
@@ -2388,11 +2389,13 @@
             drawLivesIndicator() {
                 const dotSize = 10;
                 const spacing = 12;
-                const totalWidth = (3 * dotSize) + (2 * spacing);
+                // Phase 1 has 2 lives max, Phase 2 has 3 lives max
+                const maxLives = game.gameState === 'APEX' ? 3 : 2;
+                const totalWidth = (maxLives * dotSize) + ((maxLives - 1) * spacing);
                 const startX = -totalWidth / 2 + dotSize / 2;
                 const yPos = -this.radius - 55; // Above the role emoji if it exists
 
-                for (let i = 0; i < 3; i++) {
+                for (let i = 0; i < maxLives; i++) {
                     if (i < this.lives) {
                         fill(0, 255, 102); // Neon Green
                         stroke(0);
