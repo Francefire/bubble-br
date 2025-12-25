@@ -1329,7 +1329,7 @@ SHADE</textarea>
 
                         const firstName = nameParts[0];
                         const lastPart = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
-                        const firstLetter = firstName.charAt(0).toUpperCase();
+                        const firstLetter = lastPart.charAt(0).toUpperCase();
 
                         const displayName = firstName;
                         const formattedEntry = `${displayName} ${firstLetter}#${orderId}`;
