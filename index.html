@@ -612,6 +612,20 @@
             font-size: 0.85rem;
             color: #ccc;
             line-height: 1.4;
+            margin-bottom: 0.5rem;
+        }
+
+        .role-card-player {
+            font-family: var(--ui-font);
+            font-size: 0.9rem;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: bold;
         }
 
         .explanation-btn-container {
@@ -676,48 +690,7 @@ SHADE</textarea>
             <div class="explanation-subtitle">8 Champions • 1 Survivant • Quel sera votre destin ?</div>
 
             <div id="roles-display" class="roles-grid">
-                <div class="role-card">
-                    <div class="role-card-emoji">🥷</div>
-                    <div class="role-card-name">NINJA</div>
-                    <div class="role-card-desc">Peut changer de place avec l'adversaire le plus proche.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">🕸️</div>
-                    <div class="role-card-name">MAÎTRE-TOILE</div>
-                    <div class="role-card-desc">Laisse une traînée de toile qui ralentit les ennemis.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">🛡️</div>
-                    <div class="role-card-name">TANK</div>
-                    <div class="role-card-desc">Dispose d'un bouclier directionnel en 3 parties qui repousse les
-                        ennemis.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">🗡️</div>
-                    <div class="role-card-name">ASSASSIN</div>
-                    <div class="role-card-desc">80% de chance de victoire initiale, mais s'affaiblit après chaque
-                        combat.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">🦇</div>
-                    <div class="role-card-name">VAMPIRE</div>
-                    <div class="role-card-desc">Draine la vie des ennemis proches via une aura de sang.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">💣</div>
-                    <div class="role-card-name">MARTYRE</div>
-                    <div class="role-card-desc">Explose à sa mort, éliminant les ennemis dans la zone.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">👾</div>
-                    <div class="role-card-name">ANOMALIE</div>
-                    <div class="role-card-desc">Se téléporte aléatoirement dans l'arène.</div>
-                </div>
-                <div class="role-card">
-                    <div class="role-card-emoji">👻</div>
-                    <div class="role-card-name">FANTÔME</div>
-                    <div class="role-card-desc">Devient intangible et invincible périodiquement.</div>
-                </div>
+                <!-- Roles populated dynamically in transitionToPhase2 -->
             </div>
 
             <div class="explanation-btn-container">
@@ -779,14 +752,14 @@ SHADE</textarea>
         };
 
         const ROLES = {
-            ninja: { color: '#0066FF', emoji: '🥷', name: 'Ninja' },
-            webmaster: { color: '#E0E0E0', emoji: '🕸️', name: 'Maître-Toile' },
-            tank: { color: '#888888', emoji: '🛡️', name: 'Tank' },
-            assassin: { color: '#FF0055', emoji: '🗡️', name: 'Assassin' },
-            vampire: { color: '#8B00FF', emoji: '🦇', name: 'Vampire' },
-            martyr: { color: '#FF6600', emoji: '💣', name: 'Martyre' },
-            glitch: { color: '#00F3FF', emoji: '👾', name: 'Anomalie' },
-            ghost: { color: '#FFFFFF', emoji: '👻', name: 'Fantôme' }
+            ninja: { color: '#0066FF', emoji: '🥷', name: 'Ninja', desc: 'Peut changer de place avec l\'adversaire le plus proche.' },
+            webmaster: { color: '#E0E0E0', emoji: '🕸️', name: 'Maître-Toile', desc: 'Laisse une traînée de toile qui ralentit les ennemis.' },
+            tank: { color: '#888888', emoji: '🛡️', name: 'Tank', desc: 'Dispose d\'un bouclier directionnel en 3 parties qui repousse les ennemis.' },
+            assassin: { color: '#FF0055', emoji: '🗡️', name: 'Assassin', desc: '80% de chance de victoire initiale, mais s\'affaiblit après chaque combat.' },
+            vampire: { color: '#8B00FF', emoji: '🦇', name: 'Vampire', desc: 'Draine la vie des ennemis proches via une aura de sang.' },
+            martyr: { color: '#FF6600', emoji: '💣', name: 'Martyre', desc: 'Explose à sa mort, éliminant les ennemis dans la zone.' },
+            glitch: { color: '#00F3FF', emoji: '👾', name: 'Anomalie', desc: 'Se téléporte aléatoirement dans l\'arène.' },
+            ghost: { color: '#FFFFFF', emoji: '👻', name: 'Fantôme', desc: 'Devient intangible et invincible périodiquement.' }
         };
 
         const APEX_CONFIG = {
@@ -1399,6 +1372,151 @@ SHADE</textarea>
 
             transitionToPhase2() {
                 this.gameState = 'TRANSITION';
+                this.paused = true; // Pause physics while explaining
+
+                let top8 = [];
+                const survivors = this.players.filter(p => !p.dead);
+
+                // Strategy 1: If we have 8+ alive players, use them
+                if (survivors.length >= 8) {
+                    // Sort by radius (bigger = stronger)
+                    survivors.sort((a, b) => b.radius - a.radius);
+                    top8 = survivors.slice(0, 8);
+                    // Kill the rest
+                    survivors.slice(8).forEach(p => {
+                        p.dead = true;
+                        this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
+                    });
+                    this.players.filter(p => p.dead).forEach(p => p.dead = true);
+                }
+                // Strategy 2: Try to get 8 from winning team (alive + recently dead)
+                else if (survivors.length > 0) {
+                    const winningTeam = survivors[0].team;
+                    const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
+
+                    winningTeamPlayers.sort((a, b) => {
+                        if (!a.dead && b.dead) return -1;
+                        if (a.dead && !b.dead) return 1;
+                        if (!a.dead) return b.radius - a.radius;
+                        return b.deathOrder - a.deathOrder;
+                    });
+
+                    top8 = winningTeamPlayers.slice(0, 8);
+                    const eliminated = winningTeamPlayers.slice(8);
+
+                    // Revive dead players in top 8
+                    top8.forEach(p => {
+                        if (p.dead) {
+                            p.dead = false;
+                            p.radius = CONFIG.radius;
+                            this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
+                        }
+                    });
+
+                    // Kill eliminated from winning team
+                    eliminated.forEach(p => {
+                        if (!p.dead) {
+                            p.dead = true;
+                            this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
+                        }
+                    });
+
+                    // Kill all losing team players
+                    this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
+                }
+                // Strategy 3: No clear winner, just pick any 8 players (alive first, then recently dead)
+                else {
+                    const allPlayers = [...this.players];
+                    allPlayers.sort((a, b) => {
+                        if (!a.dead && b.dead) return -1;
+                        if (a.dead && !b.dead) return 1;
+                        if (!a.dead) return b.radius - a.radius;
+                        return b.deathOrder - a.deathOrder;
+                    });
+
+                    top8 = allPlayers.slice(0, 8);
+
+                    // Revive dead players in top 8
+                    top8.forEach(p => {
+                        if (p.dead) {
+                            p.dead = false;
+                            p.radius = CONFIG.radius;
+                            this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
+                        }
+                    });
+
+                    // Kill everyone else
+                    allPlayers.slice(8).forEach(p => p.dead = true);
+                }
+
+                // Assign roles to the top 8
+                const roleKeys = shuffle(Object.keys(ROLES));
+                top8.forEach((p, idx) => {
+                    const key = roleKeys[idx];
+                    const role = ROLES[key];
+                    p.role = key;
+                    p.emoji = role.emoji;
+                    p.color = role.color;
+                    p.team = null;
+                    p.vel = p5.Vector.random2D().mult(random(CONFIG.minSpeed, CONFIG.maxSpeed));
+
+                    if (key === 'ghost') {
+                        p.lives = 3;
+                        p.ghostInvincible = false;
+                        p.ghostInvincibleTimeStep = 0;
+                        p.ghostInvincibleCooldown = 60; // Initial delay
+                    } else if (key === 'tank') {
+                        p.lives = 3;
+                        p.shieldArcs = [true, true, true];
+                        p.radius = CONFIG.radius * 2;
+                    } else {
+                        p.lives = 3;
+                    }
+                    p.ninjaSwapCooldown = 0;
+                    p.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
+                    p.assassinWinChance = 0.8;
+                    p.assassinFightsCount = 0;
+                });
+
+                console.log('Top 8 players for Phase 2:', top8.map(p => ({ name: p.name, role: p.role })));
+
+                // Clear and populate roles display
+                const rolesDisplay = select('#roles-display');
+                if (rolesDisplay) {
+                    rolesDisplay.html('');
+                    top8.forEach(p => {
+                        const role = ROLES[p.role];
+                        if (role) {
+                            const card = createDiv('');
+                            card.addClass('role-card');
+                            card.html(`
+                                <div class="role-card-emoji">${role.emoji}</div>
+                                <div class="role-card-name">${role.name.toUpperCase()}</div>
+                                <div class="role-card-desc">${role.desc}</div>
+                                <div class="role-card-player">${p.name}</div>
+                            `);
+                            rolesDisplay.child(card);
+                        } else {
+                            console.error(`Role not found for player ${p.name}: ${p.role}`);
+                        }
+                    });
+                    console.log('Roles display populated');
+                } else {
+                    console.error('#roles-display not found');
+                }
+
+                this.arenaCenter = createVector(this.width / 2, this.height / 2);
+                this.arenaRadius = max(this.width, this.height) * 1.2; // Start BIG (Standard BR style)
+                this.lastEliminationTime = millis();
+
+                // Show explanation screen IMMEDIATELY
+                select('#explanation-overlay').addClass('visible');
+            }
+
+            startPhase2() {
+                select('#explanation-overlay').removeClass('visible');
+
+                // Start transition/warmup sequence
                 const el = select('#phase-indicator');
                 el.html("PHASE 2");
                 el.style('color', '#FFFFFF');
@@ -1408,132 +1526,17 @@ SHADE</textarea>
                 el.style('text-align', 'center');
 
                 setTimeout(() => {
-                    let top8 = [];
-                    const survivors = this.players.filter(p => !p.dead);
-
-                    // Strategy 1: If we have 8+ alive players, use them
-                    if (survivors.length >= 8) {
-                        // Sort by radius (bigger = stronger)
-                        survivors.sort((a, b) => b.radius - a.radius);
-                        top8 = survivors.slice(0, 8);
-                        // Kill the rest
-                        survivors.slice(8).forEach(p => {
-                            p.dead = true;
-                            this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
-                        });
-                        this.players.filter(p => p.dead).forEach(p => p.dead = true);
-                    }
-                    // Strategy 2: Try to get 8 from winning team (alive + recently dead)
-                    else if (survivors.length > 0) {
-                        const winningTeam = survivors[0].team;
-                        const winningTeamPlayers = this.players.filter(p => p.team === winningTeam);
-
-                        winningTeamPlayers.sort((a, b) => {
-                            if (!a.dead && b.dead) return -1;
-                            if (a.dead && !b.dead) return 1;
-                            if (!a.dead) return b.radius - a.radius;
-                            return b.deathOrder - a.deathOrder;
-                        });
-
-                        top8 = winningTeamPlayers.slice(0, 8);
-                        const eliminated = winningTeamPlayers.slice(8);
-
-                        // Revive dead players in top 8
-                        top8.forEach(p => {
-                            if (p.dead) {
-                                p.dead = false;
-                                p.radius = CONFIG.radius;
-                                this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
-                            }
-                        });
-
-                        // Kill eliminated from winning team
-                        eliminated.forEach(p => {
-                            if (!p.dead) {
-                                p.dead = true;
-                                this.drawSplat(p.pos.x, p.pos.y, p.color, 60, 30);
-                            }
-                        });
-
-                        // Kill all losing team players
-                        this.players.filter(p => p.team !== winningTeam).forEach(p => p.dead = true);
-                    }
-                    // Strategy 3: No clear winner, just pick any 8 players (alive first, then recently dead)
-                    else {
-                        const allPlayers = [...this.players];
-                        allPlayers.sort((a, b) => {
-                            if (!a.dead && b.dead) return -1;
-                            if (a.dead && !b.dead) return 1;
-                            if (!a.dead) return b.radius - a.radius;
-                            return b.deathOrder - a.deathOrder;
-                        });
-
-                        top8 = allPlayers.slice(0, 8);
-
-                        // Revive dead players in top 8
-                        top8.forEach(p => {
-                            if (p.dead) {
-                                p.dead = false;
-                                p.radius = CONFIG.radius;
-                                this.spawnParticles(p.pos.x, p.pos.y, '#FFFFFF', 20);
-                            }
-                        });
-
-                        // Kill everyone else
-                        allPlayers.slice(8).forEach(p => p.dead = true);
-                    }
-
-                    // Assign roles to the top 8
-                    const roleKeys = shuffle(Object.keys(ROLES));
-                    top8.forEach((p, idx) => {
-                        const key = roleKeys[idx];
-                        const role = ROLES[key];
-                        p.role = key;
-                        p.emoji = role.emoji;
-                        p.color = role.color;
-                        p.team = null;
-                        // p.pos = createVector(this.width / 2 + random(-30, 30), this.height / 2 + random(-30, 30)); 
-                        // REMOVED: Don't teleport, let zone push them in.
-                        p.vel = p5.Vector.random2D().mult(random(CONFIG.minSpeed, CONFIG.maxSpeed));
-
-                        if (key === 'ghost') {
-                            p.lives = 3;
-                            p.ghostInvincible = false;
-                            p.ghostInvincibleTimeStep = 0;
-                            p.ghostInvincibleCooldown = 60; // Initial delay
-                        } else if (key === 'tank') {
-                            p.lives = 3;
-                            p.shieldArcs = [true, true, true];
-                            p.radius = CONFIG.radius * 2;
-                        } else {
-                            p.lives = 3;
-                        }
-                        p.ninjaSwapCooldown = 0;
-                        p.glitchTeleportCooldown = APEX_CONFIG.glitchTeleportInterval;
-                    });
-
-                    this.arenaCenter = createVector(this.width / 2, this.height / 2);
-                    this.arenaRadius = max(this.width, this.height) * 1.2; // Start BIG (Standard BR style)
-                    this.lastEliminationTime = millis();
-
                     el.html("L'ARÈNE SUPRÊME");
                     el.style('color', '#FFD700');
 
-                    // Show explanation screen and wait for user
                     setTimeout(() => {
                         el.style('display', 'none');
-                        select('#explanation-overlay').addClass('visible');
-                        this.paused = true; // Pause physics while explaining
+                        this.paused = false;
+                        this.gameState = 'APEX';
+                        this.updateCount();
+                        this.log('⚔️ LE COMBAT FINAL COMMENCE !', 'système');
                     }, 2000);
-                }, 3000);
-            }
-
-            startPhase2() {
-                select('#explanation-overlay').removeClass('visible');
-                this.paused = false;
-                this.gameState = 'APEX';
-                this.updateCount();
-                this.log('⚔️ LE COMBAT FINAL COMMENCE !', 'système');
+                }, 2000);
             }
 
             updateArenaShrinking() {
