@@ -93,6 +93,22 @@
             text-align: center;
             transform: rotate(-1deg);
             transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        /* Custom Scrollbar for Panel */
+        .panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .panel::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .panel::-webkit-scrollbar-thumb {
+            background: var(--accent);
+            border-radius: 4px;
         }
 
         .panel h1 {
@@ -633,6 +649,122 @@
             justify-content: center;
             margin-top: 1rem;
         }
+
+        /* Home Page Mechanics Section */
+        #home-mechanics {
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 2px dashed #444;
+            text-align: left;
+        }
+
+        .mechanics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .mech-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #333;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mech-box h3 {
+            font-family: var(--ui-font);
+            color: var(--neon-blue);
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mech-box p {
+            font-size: 0.8rem;
+            color: #aaa;
+            line-height: 1.5;
+            margin-bottom: 0;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        .mech-box::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--accent);
+        }
+
+        .roles-preview {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .role-mini-card {
+            background: #111;
+            padding: 0.5rem;
+            border: 1px solid #222;
+            text-align: center;
+            cursor: help;
+            transition: all 0.2s;
+        }
+
+        .role-mini-card:hover {
+            border-color: var(--neon-green);
+            transform: scale(1.05);
+            background: #1a1a1a;
+        }
+
+        .role-mini-emoji {
+            font-size: 1.5rem;
+        }
+
+        .role-mini-name {
+            font-size: 0.6rem;
+            color: #fff;
+            margin-top: 0.2rem;
+            display: block;
+        }
+
+        #rules-toggle-btn {
+            background: transparent;
+            color: #888;
+            border: 1px solid #444;
+            padding: 0.8rem 1.5rem;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: var(--ui-font);
+            letter-spacing: 1px;
+            width: 100%;
+        }
+
+        #rules-toggle-btn:hover {
+            color: #fff;
+            border-color: #666;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .rules-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-out;
+        }
+
+        .rules-content.open {
+            max-height: 1200px;
+        }
     </style>
 </head>
 
@@ -646,11 +778,8 @@
         <div id="setup-panel" class="panel">
             <h1>EPOK<br>ROYALE</h1>
             <p>Qui laissera sa trace ?</p>
-            <textarea id="name-input" spellcheck="false">GHOST
-BLADE
-NEON
-VIPER
-SHADE</textarea>
+            <textarea id="name-input" spellcheck="false"
+                placeholder="Entrez le nom des joueurs ou importez des csv"></textarea>
             <div style="margin-bottom: 2rem; display: flex; gap: 1rem; justify-content: center;">
                 <button class="btn" id="start-btn">JOUER</button>
                 <button class="btn" id="import-btn" title="Importer CSV"
@@ -664,6 +793,67 @@ SHADE</textarea>
                 </button>
             </div>
             <input type="file" id="csv-input" accept=".csv, .txt" style="display: none;" multiple>
+
+            <button id="rules-toggle-btn">POURQUOI CE JEU ? • RÈGLES</button>
+
+            <div id="rules-content" class="rules-content">
+                <div id="home-mechanics">
+                    <div class="mechanics-grid">
+                        <div class="mech-box">
+                            <h3><span>⚔️</span> PHASE 1 : CREW BATTLE</h3>
+                            <p>Les joueurs sont divisés en deux équipes : <b>CYAN</b> vs <b>MAGENTA</b>. <br><br>
+                                Propulsez-vous sur vos ennemis pour les éliminer. Vos propres alliés vous font rebondir
+                                sans
+                                danger.
+                                Marquez le terrain de votre peinture !</p>
+                        </div>
+                        <div class="mech-box" style="--accent: var(--neon-blue);">
+                            <h3><span>🏆</span> PHASE 2 : ARÈNE SUPRÊME</h3>
+                            <p>Le <b>TOP 8</b> s'affronte dans un duel final. <br><br>
+                                L'arène rétrécit. Chaque champion reçoit un <b>Rôle Unique</b> et <b>3 Vies</b>.
+                                Le dernier survivant l'emporte !</p>
+                        </div>
+                    </div>
+
+                    <h3 style="color: var(--neon-green); font-size: 1rem; margin-bottom: 1rem; text-align: center;">LES
+                        8
+                        CHAMPIONS DE L'APEX</h3>
+                    <div class="roles-preview">
+                        <div class="role-mini-card" title="🥷 Échange de place avec l'adversaire">
+                            <span class="role-mini-emoji">🥷</span>
+                            <span class="role-mini-name">NINJA</span>
+                        </div>
+                        <div class="role-mini-card" title="🛡️ Bouclier directionnel triple">
+                            <span class="role-mini-emoji">🛡️</span>
+                            <span class="role-mini-name">TANK</span>
+                        </div>
+                        <div class="role-mini-card" title="🦇 Aura de drain de vie">
+                            <span class="role-mini-emoji">🦇</span>
+                            <span class="role-mini-name">VAMPIRE</span>
+                        </div>
+                        <div class="role-mini-card" title="🗡️ Puissant mais s'épuise vite">
+                            <span class="role-mini-emoji">🗡️</span>
+                            <span class="role-mini-name">ASSASSIN</span>
+                        </div>
+                        <div class="role-mini-card" title="🕸️ Traînées de toile ralentissantes">
+                            <span class="role-mini-emoji">🕸️</span>
+                            <span class="role-mini-name">WEBMASTER</span>
+                        </div>
+                        <div class="role-mini-card" title="👻 Intangibilité périodique">
+                            <span class="role-mini-emoji">👻</span>
+                            <span class="role-mini-name">FANTÔME</span>
+                        </div>
+                        <div class="role-mini-card" title="👾 Téléportations erratiques">
+                            <span class="role-mini-emoji">👾</span>
+                            <span class="role-mini-name">ANOMALIE</span>
+                        </div>
+                        <div class="role-mini-card" title="💣 Explose à sa mort">
+                            <span class="role-mini-emoji">💣</span>
+                            <span class="role-mini-name">MARTYRE</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- WIN -->
@@ -799,6 +989,18 @@ SHADE</textarea>
             select('#import-btn').mousePressed(() => select('#csv-input').elt.click());
             select('#csv-input').changed((e) => game.handleFileUpload(e));
             select('#start-phase2-btn').mousePressed(() => game.startPhase2());
+
+            // Rules toggle logic
+            select('#rules-toggle-btn').mousePressed(() => {
+                const content = select('#rules-content');
+                content.toggleClass('open');
+                const btn = select('#rules-toggle-btn');
+                if (content.hasClass('open')) {
+                    btn.html('FERMER LES RÈGLES');
+                } else {
+                    btn.html('POURQUOI CE JEU ? • RÈGLES');
+                }
+            });
 
             // Debug Controls
             game.setupDebugControls();
